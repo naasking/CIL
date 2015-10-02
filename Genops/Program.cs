@@ -61,7 +61,7 @@ namespace Genops
             File.WriteAllText("../../../CIL/OpType.cs", sb.ToString());
 
             //var il = CIL.IL.Read(getName.Method.Module, getName.Method.GetMethodBody().GetILAsByteArray());
-            var method = typeof(Program).GetMethod("Main", BindingFlags.NonPublic | BindingFlags.Static);
+            var method = new Action<string[]>(Main).Method;
             var il = method.GetInstructions();
         }
     }
