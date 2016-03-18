@@ -15,6 +15,9 @@ namespace CIL
         static readonly OpCode[] oneByteOps = new OpCode[256];
         static readonly OpCode[] twoByteOps = new OpCode[256];
 
+        // looks like a nice intro if I ever support more metadata:
+        // http://www.codeproject.com/Articles/42649/NET-file-format-Signatures-under-the-hood-Part
+
         static IL()
         {
             var type = typeof(OpCodes);
@@ -110,11 +113,6 @@ namespace CIL
                 yield return new Instruction(module, op, arg);
             }
         }
-
-        //public static OpType Read(byte op)
-        //{
-        //    return 
-        //}
 
         /// <summary>
         /// Normalizes all the special inline instructions into a

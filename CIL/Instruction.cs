@@ -151,6 +151,34 @@ namespace CIL
             }
         }
 
+        public FieldInfo ResolveField()
+        {
+            if (OpCode.OperandType != OperandType.InlineField)
+                throw new InvalidOperationException("Instruction does not reference a field.");
+            return GetModule().ResolveField(Operand.MetadataToken);
+        }
+
+        public MethodBase ResolveMethod()
+        {
+            if (OpCode.OperandType != OperandType.InlineMethod)
+                throw new InvalidOperationException("Instruction does not reference a method.");
+            return GetModule().ResolveMethod(Operand.MetadataToken);
+        }
+
+        public string ResolveString()
+        {
+            if (OpCode.OperandType != OperandType.InlineString)
+                throw new InvalidOperationException("Instruction does not reference a string.");
+            return GetModule().ResolveString(Operand.MetadataToken);
+        }
+
+        public Type ResolveType()
+        {
+            if (OpCode.OperandType != OperandType.InlineType || OpCode.OperandType != OperandType.InlineTok)
+                throw new InvalidOperationException("Instruction does not reference a type or token.");
+            return GetModule().ResolveType(Operand.MetadataToken);
+        }
+
         public override string ToString()
         {
             return OpCode.Name + " " + Resolve();
