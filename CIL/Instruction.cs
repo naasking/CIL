@@ -151,6 +151,46 @@ namespace CIL
             }
         }
 
+        /// <summary>
+        /// Normalizes all the special inline instructions into a
+        /// single instruction type with an argument.
+        /// </summary>
+        /// <param name="op"></param>
+        /// <returns></returns>
+        public Instruction Simplify()
+        {
+            switch (OpCode.Type())
+            {
+                case OpType.Stloc_s: return new Instruction(Module, OpCodes.Stloc, Operand);
+                case OpType.Stloc_0: return new Instruction(Module, OpCodes.Stloc, 0);
+                case OpType.Stloc_1: return new Instruction(Module, OpCodes.Stloc, 1);
+                case OpType.Stloc_2: return new Instruction(Module, OpCodes.Stloc, 2);
+                case OpType.Stloc_3: return new Instruction(Module, OpCodes.Stloc, 3);
+                case OpType.Ldloc_s: return new Instruction(Module, OpCodes.Ldloc, Operand);
+                case OpType.Ldloc_0: return new Instruction(Module, OpCodes.Ldloc, 0);
+                case OpType.Ldloc_1: return new Instruction(Module, OpCodes.Ldloc, 1);
+                case OpType.Ldloc_2: return new Instruction(Module, OpCodes.Ldloc, 2);
+                case OpType.Ldloc_3: return new Instruction(Module, OpCodes.Ldloc, 3);
+                case OpType.Ldarg_s: return new Instruction(Module, OpCodes.Ldarg, Operand);
+                case OpType.Ldarg_0: return new Instruction(Module, OpCodes.Ldarg, 0);
+                case OpType.Ldarg_1: return new Instruction(Module, OpCodes.Ldarg, 1);
+                case OpType.Ldarg_2: return new Instruction(Module, OpCodes.Ldarg, 2);
+                case OpType.Ldarg_3: return new Instruction(Module, OpCodes.Ldarg, 3);
+                case OpType.Ldc_i4_s: return new Instruction(Module, OpCodes.Ldc_I4, Operand);
+                case OpType.Ldc_i4_0: return new Instruction(Module, OpCodes.Ldc_I4, 0);
+                case OpType.Ldc_i4_1: return new Instruction(Module, OpCodes.Ldc_I4, 1);
+                case OpType.Ldc_i4_2: return new Instruction(Module, OpCodes.Ldc_I4, 2);
+                case OpType.Ldc_i4_3: return new Instruction(Module, OpCodes.Ldc_I4, 3);
+                case OpType.Ldc_i4_4: return new Instruction(Module, OpCodes.Ldc_I4, 4);
+                case OpType.Ldc_i4_5: return new Instruction(Module, OpCodes.Ldc_I4, 5);
+                case OpType.Ldc_i4_6: return new Instruction(Module, OpCodes.Ldc_I4, 6);
+                case OpType.Ldc_i4_7: return new Instruction(Module, OpCodes.Ldc_I4, 7);
+                case OpType.Ldc_i4_8: return new Instruction(Module, OpCodes.Ldc_I4, 8);
+                case OpType.Leave_s:  return new Instruction(Module, OpCodes.Leave, Operand);
+                default:              return this;
+            }
+        }
+
         public FieldInfo ResolveField()
         {
             if (OpCode.OperandType != OperandType.InlineField)
