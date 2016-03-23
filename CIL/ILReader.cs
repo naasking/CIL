@@ -44,7 +44,7 @@ namespace CIL
             return new Label { pos = i };
         }
 
-        public void Backtrack(Label mark)
+        public void Seek(Label mark)
         {
             i = mark.pos;
         }
