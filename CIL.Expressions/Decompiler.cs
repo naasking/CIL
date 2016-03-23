@@ -379,6 +379,10 @@ namespace CIL.Expressions
                     case OpType.Unbox_any:
                         eval.Push(Expression.Unbox(eval.Pop(), x.ResolveType()));
                         break;
+                    case OpType.Xor:
+                        rhs = eval.Pop();
+                        eval.Push(Expression.ExclusiveOr(eval.Pop(), rhs));
+                        break;
                     default:
                         throw new ArgumentException("Can't translate CIL to Expression: " + x.ToString(), "il");
                 }
