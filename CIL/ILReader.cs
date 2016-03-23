@@ -19,6 +19,7 @@ namespace CIL
         {
             this.module = module;
             this.locals = body.LocalVariables;
+            this.args = args;
             this.code = body.GetILAsByteArray();
         }
 
