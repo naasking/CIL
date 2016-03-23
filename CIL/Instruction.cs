@@ -190,6 +190,14 @@ namespace CIL
                 case OpType.Brfalse_s:return new Instruction(Module, OpCodes.Brfalse, Operand);
                 case OpType.Brtrue_s: return new Instruction(Module, OpCodes.Brtrue, Operand);
                 case OpType.Br_s:     return new Instruction(Module, OpCodes.Br, Operand);
+                case OpType.Beq_s:    return new Instruction(Module, OpCodes.Beq, Operand);
+                case OpType.Bge_s:    return new Instruction(Module, OpCodes.Bge, Operand);
+                case OpType.Bge_un_s: return new Instruction(Module, OpCodes.Bgt_Un, Operand);
+                case OpType.Ble_s:    return new Instruction(Module, OpCodes.Ble, Operand);
+                case OpType.Ble_un_s: return new Instruction(Module, OpCodes.Ble_Un, Operand);
+                case OpType.Blt_s:    return new Instruction(Module, OpCodes.Blt, Operand);
+                case OpType.Blt_un_s: return new Instruction(Module, OpCodes.Blt_Un, Operand);
+                case OpType.Bne_un_s: return new Instruction(Module, OpCodes.Bne_Un, Operand);
                 default:              return this;
             }
         }
