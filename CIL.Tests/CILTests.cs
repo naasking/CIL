@@ -24,7 +24,27 @@ namespace CIL.Tests
         public static void TestEqConst()
         {
             Func<bool> foo = () => 3 != 5;
-            Expression<Func<bool>> fooe = () => 1 == 1;
+            Expression<Func<bool>> fooe = () => true;
+            var decompiled = foo.GetExpression();
+            Assert.Equal(fooe.ToString(), decompiled.ToString());
+            Assert.NotEqual(Expression.Constant(3).ToString(), decompiled.ToString());
+        }
+
+        [Fact]
+        public static void TestEqParam()
+        {
+            Func<int, bool> foo = x => 3 != x;
+            Expression<Func<int, bool>> fooe = x => 3 != x;
+            var decompiled = foo.GetExpression();
+            Assert.Equal(fooe.ToString(), decompiled.ToString());
+            Assert.NotEqual(Expression.Constant(3).ToString(), decompiled.ToString());
+        }
+
+        [Fact]
+        public static void TestEqParamReverse()
+        {
+            Func<int, bool> foo = x => x != 3;
+            Expression<Func<int, bool>> fooe = x => x != 3;
             var decompiled = foo.GetExpression();
             Assert.Equal(fooe.ToString(), decompiled.ToString());
             Assert.NotEqual(Expression.Constant(3).ToString(), decompiled.ToString());
@@ -34,6 +54,7 @@ namespace CIL.Tests
         {
             TestSimple();
             TestEqConst();
+            TestEqParam();
         }
     }
 }

@@ -21,21 +21,25 @@ namespace CIL.Expressions
             var il = f.Method.GetInstructions();
             var args = f.Method.GetParameters()
                     .Select(x => Expression.Parameter(x.ParameterType, x.Name))
-                    .ToArray();
+                    .ToList();
+            // instance methods hide arg0 for the 'this' parameter
+            if (!f.Method.IsStatic)
+                args.Insert(0, Expression.Parameter(f.Method.DeclaringType, "self"));
             Process(il, args, eval);
             Debug.Assert(eval.Count == 1);
             Debug.Assert(false == il.MoveNext());
             // bools don't actually exist at CIL level, they are simply native ints
             // so they need special handling to decompile to a typed expression
             var e = eval.Pop();
-            var body = f.Method.ReturnType != typeof(bool)  ? e:
+            var body = f.Method.ReturnType == e.Type        ? e:
                        e.NodeType == ExpressionType.Constant? Expression.Constant(1 == (int)(e as ConstantExpression).Value, f.Method.ReturnType):
                                                               Expression.Equal(e, Expression.Constant(1)) as Expression;
             Debug.Assert(body.Type == f.Method.ReturnType);
-            return Expression.Lambda<T>(body, args);
+            // skip the 'this' parameter for instance methods
+            return Expression.Lambda<T>(body, f.Method.IsStatic ? args : args.Skip(1));
         }
 
-        static void Process(ILReader il, ParameterExpression[] args, Stack<Expression> eval)
+        static void Process(ILReader il, List<ParameterExpression> args, Stack<Expression> eval)
         {
             //FIXME: could make the output even nicer by transforming op_* methods back into their respective
             //expressions, ie. op_Addition => Expression.Add, etc.
@@ -62,6 +66,12 @@ namespace CIL.Expressions
                     case OpType.Box:
                         //FIXME: I don't think I need to do anything, since the top of the stack is already the right type
                         break;
+                    //FIXME: these will require two recursive calls each of which follows a branch target
+                    //and then unifies them via Expression.IfThenElse()
+                    //case OpType.Br:
+                    //case OpType.Brfalse:
+                    //case OpType.Brtrue:
+                    //  break;
                     case OpType.Call:
                     case OpType.Callvirt:
                         var method = (MethodInfo)x.ResolveMethod();
@@ -71,12 +81,27 @@ namespace CIL.Expressions
                         eval.Push(Expression.Call(minstance, method, margs));
                         break;
                     case OpType.Castclass:
-                        //eval.Push(Expression.TypeAs(eval.Pop(), x.ResolveType()));
                         eval.Push(Expression.Convert(eval.Pop(), x.ResolveType()));
                         break;
                     case OpType.Ceq:
+                        // bools are native ints in CIL, and != is a comparison against 0
                         rhs = eval.Pop();
-                        eval.Push(Expression.Equal(eval.Pop(), rhs));
+                        var lhs = eval.Pop();
+                        if (lhs.Type != typeof(bool))
+                        {
+                            eval.Push(Expression.Equal(lhs, rhs));
+                        }
+                        else if (rhs.NodeType == ExpressionType.Constant || lhs.NodeType == ExpressionType.Constant)
+                        {
+                            var ec = rhs as ConstantExpression ?? lhs as ConstantExpression;
+                            Debug.Assert((int)ec.Value == 0);
+                            var other = lhs as BinaryExpression ?? rhs as BinaryExpression;
+                            eval.Push(Expression.NotEqual(other.Left, other.Right));
+                        }
+                        else
+                        {
+                            throw new InvalidOperationException("Unknown bool comparison!");
+                        }
                         break;
                     case OpType.Cgt:
                     case OpType.Cgt_un:
