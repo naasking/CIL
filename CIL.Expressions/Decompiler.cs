@@ -346,6 +346,12 @@ namespace CIL.Expressions
                         var idx = eval.Pop();
                         eval.Push(Expression.Assign(Expression.ArrayAccess(eval.Pop(), idx), rhs));
                         break;
+                    case OpType.Stfld:
+                        rhs = eval.Pop();
+                        eval.Push(Expression.Assign(Expression.Field(eval.Pop(), x.ResolveField()), rhs));
+                        break;
+                    case OpType.Stobj:  // I think this is a no-op with expressions
+                        break;
                     case OpType.Sub:
                         rhs = eval.Pop();
                         eval.Push(Expression.Subtract(eval.Pop(), rhs));
