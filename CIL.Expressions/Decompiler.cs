@@ -28,7 +28,8 @@ namespace CIL.Expressions
             // instance methods hide arg0 for the 'this' parameter
             if (!f.Method.IsStatic)
                 args.Insert(0, Expression.Parameter(f.Method.DeclaringType, "self"));
-            Process(il, args, eval);
+            var locals = il.Locals.Select(x => Expression.Variable(x.LocalType)).ToList();
+            Process(il, args, locals, eval);
             Debug.Assert(eval.Count == 1);
             Debug.Assert(false == il.MoveNext());
             // bools don't actually exist at CIL level, they are simply native ints
@@ -43,7 +44,7 @@ namespace CIL.Expressions
             return Expression.Lambda<T>(body, f.Method.IsStatic ? args : args.Skip(1));
         }
 
-        static void Process(ILReader il, List<ParameterExpression> args, Stack<Expression> eval)
+        static void Process(ILReader il, List<ParameterExpression> args, List<ParameterExpression> locals, Stack<Expression> eval)
         {
             //FIXME: could make the output even nicer by transforming op_* methods back into their respective
             //expressions, ie. op_Addition => Expression.Add, etc.
@@ -260,8 +261,7 @@ namespace CIL.Expressions
                         eval.Push(Expression.ArrayLength(eval.Pop()));
                         break;
                     case OpType.Ldloc:
-                        var loc = il.Local(x.Operand.Int32);
-                        eval.Push(Expression.Variable(loc.LocalType, "loc" + loc.LocalIndex));
+                        eval.Push(locals[x.Operand.Int32]);
                         break;
                     case OpType.Ldnull:
                         eval.Push(Expression.Constant(null));
@@ -349,6 +349,9 @@ namespace CIL.Expressions
                     case OpType.Stfld:
                         rhs = eval.Pop();
                         eval.Push(Expression.Assign(Expression.Field(eval.Pop(), x.ResolveField()), rhs));
+                        break;
+                    case OpType.Stloc:
+                        eval.Push(Expression.Assign(locals[x.Operand.Int32], eval.Pop()));
                         break;
                     case OpType.Stobj:  // I think this is a no-op with expressions
                         break;
