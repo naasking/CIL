@@ -10,30 +10,20 @@ namespace CIL
     public class ILReader : IEnumerator<Instruction>
     {
         Module module;
-        IList<LocalVariableInfo> locals;
-        ParameterInfo[] args;
         byte[] code;
         int i;
 
         public ILReader(Module module, MethodBody body, ParameterInfo[] args)
         {
             this.module = module;
-            this.locals = body.LocalVariables;
-            this.args = args;
+            this.Locals = body.LocalVariables;
+            this.Args = args;
             this.code = body.GetILAsByteArray();
         }
 
         public Instruction Current { get; private set; }
-
-        public LocalVariableInfo Local(int slot)
-        {
-            return locals[slot];
-        }
-
-        public ParameterInfo Parameter(int slot)
-        {
-            return args[slot];
-        }
+        public IList<LocalVariableInfo> Locals { get; private set; }
+        public IList<ParameterInfo> Args { get; private set; }
 
         public struct Label
         {
