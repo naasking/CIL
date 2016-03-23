@@ -12,6 +12,9 @@ namespace CIL.Expressions
 {
     public static class Decompiler
     {
+        static readonly MethodInfo dblIsInfinity = typeof(double).GetMethod("IsInfinity", BindingFlags.Static | BindingFlags.Public);
+        static readonly MethodInfo fltIsInfinity = typeof(float).GetMethod("IsInfinity", BindingFlags.Static | BindingFlags.Public);
+
         public static Expression<T> GetExpression<T>(this T func)
             where T : class
         {
@@ -69,6 +72,14 @@ namespace CIL.Expressions
                         break;
                     //FIXME: these will require two recursive calls each of which follows a branch target
                     //and then unifies them via Expression.IfThenElse()
+                    //case OpType.Beq:
+                    //case OpType.Bge:
+                    //case OpType.Bge_un:
+                    //case OpType.Ble:
+                    //case OpType.Ble_un:
+                    //case OpType.Blt:
+                    //case OpType.Blt_un:
+                    //case OpType.Bne_un:
                     //case OpType.Br:
                     //case OpType.Brfalse:
                     //case OpType.Brtrue:
@@ -110,6 +121,12 @@ namespace CIL.Expressions
                     case OpType.Cgt_un:
                         rhs = eval.Pop();
                         eval.Push(Expression.GreaterThan(eval.Pop(), rhs));
+                        break;
+                    case OpType.Ckfinite:
+                        var isInfinity = eval.Peek().Type == typeof(float) ? fltIsInfinity : dblIsInfinity;
+                        var ethrow = Expression.Throw(Expression.Constant(new ArithmeticException()));
+                        var evalue = eval.Pop();
+                        eval.Push(Expression.IfThenElse(Expression.Call(isInfinity, evalue), ethrow, evalue));
                         break;
                     case OpType.Clt:
                     case OpType.Clt_un:
@@ -220,6 +237,7 @@ namespace CIL.Expressions
                         eval.Push(Expression.Constant(r4));
                         break;
                     case OpType.Ldelem:
+                    case OpType.Ldelem_ref:
                     case OpType.Ldelem_i:
                     case OpType.Ldelem_i1:
                     case OpType.Ldelem_i2:
