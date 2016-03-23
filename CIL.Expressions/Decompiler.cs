@@ -57,11 +57,11 @@ namespace CIL.Expressions
                     case OpType.Add_ovf:
                     case OpType.Add_ovf_un:
                         rhs = eval.Pop();
-                        eval.Push(Expression.Add(eval.Pop(), rhs));
+                        eval.Push(Expression.AddChecked(eval.Pop(), rhs));
                         break;
                     case OpType.Add:
                         rhs = eval.Pop();
-                        eval.Push(Expression.AddChecked(eval.Pop(), rhs));
+                        eval.Push(Expression.Add(eval.Pop(), rhs));
                         break;
                     case OpType.And:
                         rhs = eval.Pop();
