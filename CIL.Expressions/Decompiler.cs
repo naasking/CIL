@@ -12,18 +12,23 @@ namespace CIL.Expressions
 {
     public static class Decompiler
     {
-        public static Expression GetExpression(this Delegate func)
+        public static Expression<T> GetExpression<T>(this T func)
+            where T : class
         {
             if (func == null) throw new ArgumentNullException("func");
+            var f = func as Delegate;
             var eval = new Stack<Expression>();
-            var il = func.Method.GetInstructions();
-            Process(il, eval);
+            var il = f.Method.GetInstructions();
+            var args = f.Method.GetParameters()
+                    .Select(x => Expression.Parameter(x.ParameterType, x.Name))
+                    .ToArray();
+            Process(il, args, eval);
             Debug.Assert(eval.Count == 1);
             Debug.Assert(false == il.MoveNext());
-            return eval.Pop();
+            return Expression.Lambda<T>(eval.Pop(), args);
         }
 
-        static void Process(ILReader il, Stack<Expression> eval)
+        static void Process(ILReader il, ParameterExpression[] args, Stack<Expression> eval)
         {
             //FIXME: could make the output even nicer by transforming op_* methods back into their respective
             //expressions, ie. op_Addition => Expression.Add, etc.
@@ -161,8 +166,7 @@ namespace CIL.Expressions
                         eval.Push(Expression.TypeAs(eval.Pop(), x.ResolveType()));
                         break;
                     case OpType.Ldarg:
-                        var arg = il.Parameter(x.Operand.Int32);
-                        eval.Push(Expression.Parameter(arg.ParameterType, arg.Name));
+                        eval.Push(args[x.Operand.Int32]);
                         break;
                     case OpType.Ldc_i4:
                         var i4 = x.Operand.Int32;
