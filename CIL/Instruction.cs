@@ -14,28 +14,28 @@ namespace CIL
         [FieldOffset(0)]
         public readonly double Float64;
         [FieldOffset(4)]
-        public readonly double Float32;
+        public readonly float Float32;
         [FieldOffset(0)]
         public readonly long Int64;
         [FieldOffset(0)]
         public readonly ulong UInt64;
-        [FieldOffset(4)]
+        [FieldOffset(0)]
         public readonly int Int32;
-        [FieldOffset(4)]
+        [FieldOffset(0)]
         public readonly uint UInt32;
-        [FieldOffset(6)]
+        [FieldOffset(0)]
         public readonly short Int16;
-        [FieldOffset(6)]
+        [FieldOffset(0)]
         public readonly ushort UInt16;
-        [FieldOffset(7)]
+        [FieldOffset(0)]
         public readonly sbyte Int8;
-        [FieldOffset(7)]
+        [FieldOffset(0)]
         public readonly byte UInt8;
-        [FieldOffset(6)]
+        [FieldOffset(0)]
         public readonly char Char;
 
         // use Module.Resolve* to extract the string, fields, methods, or other values.
-        [FieldOffset(4)]
+        [FieldOffset(0)]
         public readonly int MetadataToken;
 
         public Operand(int x)
