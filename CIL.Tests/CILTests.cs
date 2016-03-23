@@ -12,12 +12,28 @@ namespace CIL.Tests
     public class CILTests
     {
         [Fact]
-        public void TestSimple()
+        public static void TestSimple()
         {
             Func<int> foo = () => 3;
             Expression<Func<int>> fooe = () => 3;
-            Assert.Equal(fooe.ToString(), foo.GetExpression().ToString());
-            Assert.NotEqual(Expression.Constant(3).ToString(), Expression.Constant(0).ToString());
+            var decompiled = foo.GetExpression();
+            Assert.Equal(fooe.ToString(), decompiled.ToString());
+            Assert.NotEqual(Expression.Constant(3).ToString(), decompiled.ToString());
+        }
+        [Fact]
+        public static void TestEqConst()
+        {
+            Func<bool> foo = () => 3 != 5;
+            Expression<Func<bool>> fooe = () => 1 == 1;
+            var decompiled = foo.GetExpression();
+            Assert.Equal(fooe.ToString(), decompiled.ToString());
+            Assert.NotEqual(Expression.Constant(3).ToString(), decompiled.ToString());
+        }
+
+        public static void Main(string[] args)
+        {
+            TestSimple();
+            TestEqConst();
         }
     }
 }

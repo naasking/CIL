@@ -25,7 +25,14 @@ namespace CIL.Expressions
             Process(il, args, eval);
             Debug.Assert(eval.Count == 1);
             Debug.Assert(false == il.MoveNext());
-            return Expression.Lambda<T>(eval.Pop(), args);
+            // bools don't actually exist at CIL level, they are simply native ints
+            // so they need special handling to decompile to a typed expression
+            var e = eval.Pop();
+            var body = f.Method.ReturnType != typeof(bool)  ? e:
+                       e.NodeType == ExpressionType.Constant? Expression.Constant(1 == (int)(e as ConstantExpression).Value, f.Method.ReturnType):
+                                                              Expression.Equal(e, Expression.Constant(1)) as Expression;
+            Debug.Assert(body.Type == f.Method.ReturnType);
+            return Expression.Lambda<T>(body, args);
         }
 
         static void Process(ILReader il, ParameterExpression[] args, Stack<Expression> eval)
