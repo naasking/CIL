@@ -187,6 +187,9 @@ namespace CIL
                 case OpType.Ldc_i4_7: return new Instruction(Module, OpCodes.Ldc_I4, 7);
                 case OpType.Ldc_i4_8: return new Instruction(Module, OpCodes.Ldc_I4, 8);
                 case OpType.Leave_s:  return new Instruction(Module, OpCodes.Leave, Operand);
+                case OpType.Brfalse_s:return new Instruction(Module, OpCodes.Brfalse, Operand);
+                case OpType.Brtrue_s: return new Instruction(Module, OpCodes.Brtrue, Operand);
+                case OpType.Br_s:     return new Instruction(Module, OpCodes.Br, Operand);
                 default:              return this;
             }
         }
