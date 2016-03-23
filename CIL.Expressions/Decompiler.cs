@@ -31,9 +31,10 @@ namespace CIL.Expressions
             // bools don't actually exist at CIL level, they are simply native ints
             // so they need special handling to decompile to a typed expression
             var e = eval.Pop();
-            var body = f.Method.ReturnType == e.Type        ? e:
-                       e.NodeType == ExpressionType.Constant? Expression.Constant(1 == (int)(e as ConstantExpression).Value, f.Method.ReturnType):
-                                                              Expression.Equal(e, Expression.Constant(1)) as Expression;
+            //var body = f.Method.ReturnType == e.Type        ? e:
+            //           e.NodeType == ExpressionType.Constant? Expression.Constant(1 == (int)(e as ConstantExpression).Value, f.Method.ReturnType):
+            //                                                  Expression.Equal(e, Expression.Constant(1)) as Expression;
+            var body = Cast(e, f.Method.ReturnType);
             Debug.Assert(body.Type == f.Method.ReturnType);
             // skip the 'this' parameter for instance methods
             return Expression.Lambda<T>(body, f.Method.IsStatic ? args : args.Skip(1));
@@ -76,7 +77,9 @@ namespace CIL.Expressions
                     case OpType.Callvirt:
                         var method = (MethodInfo)x.ResolveMethod();
                         var mparams = method.GetParameters();
-                        var margs = mparams.Select(a => eval.Pop()).Reverse().ToArray();
+                        var margs = mparams.Select((a, i) => Cast(eval.Pop(), mparams[i].ParameterType))
+                                           .Reverse()
+                                           .ToArray();
                         var minstance = method.IsStatic ? null : eval.Pop();
                         eval.Push(Expression.Call(minstance, method, margs));
                         break;
@@ -337,6 +340,13 @@ namespace CIL.Expressions
                         throw new ArgumentException("Can't translate CIL to Expression: " + x.ToString(), "instr");
                 }
             }
+        }
+
+        static Expression Cast(Expression e, Type type)
+        {
+            return e.Type == type                       ? e:
+                   e.NodeType == ExpressionType.Constant? Expression.Constant(Convert.ChangeType((e as ConstantExpression).Value, type)):
+                                                          Expression.Convert(e, type) as Expression;
         }
     }
 }

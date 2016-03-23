@@ -50,11 +50,34 @@ namespace CIL.Tests
             Assert.NotEqual(Expression.Constant(3).ToString(), decompiled.ToString());
         }
 
+        [Fact]
+        public static void TestStringOps()
+        {
+            Func<string, string> foo = x => x.Substring(3).Replace(';', ':').PadRight(3);
+            Expression<Func<string, string>> fooe = x => x.Substring(3).Replace(';', ':').PadRight(3);
+            var decompiled = foo.GetExpression();
+            Assert.Equal(fooe.ToString(), decompiled.ToString());
+            Assert.NotEqual(Expression.Constant(3).ToString(), decompiled.ToString());
+        }
+
+        //[Fact]
+        //public static void TestBoolOps()
+        //{
+        //    Func<bool, bool, bool> foo = (x,y) => x || !x && y;
+        //    Expression<Func<bool, bool, bool>> fooe = (x, y) => x || !x && y;
+        //    var decompiled = foo.GetExpression();
+        //    Assert.Equal(fooe.ToString(), decompiled.ToString());
+        //    Assert.NotEqual(Expression.Constant(3).ToString(), decompiled.ToString());
+        //}
+
         public static void Main(string[] args)
         {
             TestSimple();
             TestEqConst();
             TestEqParam();
+            TestEqParamReverse();
+            TestStringOps();
+            TestBoolOps();
         }
     }
 }
