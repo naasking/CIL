@@ -330,6 +330,22 @@ namespace CIL.Expressions
                     case OpType.Sizeof:
                         eval.Push(Expression.Constant(Marshal.SizeOf(x.ResolveType())));
                         break;
+                    case OpType.Starg:
+                        eval.Push(Expression.Assign(args[x.Operand.Int32], eval.Pop()));
+                        break;
+                    case OpType.Stelem:
+                    case OpType.Stelem_i:
+                    case OpType.Stelem_i1:
+                    case OpType.Stelem_i2:
+                    case OpType.Stelem_i4:
+                    case OpType.Stelem_i8:
+                    case OpType.Stelem_r4:
+                    case OpType.Stelem_r8:
+                    case OpType.Stelem_ref:
+                        rhs = eval.Pop();
+                        var idx = eval.Pop();
+                        eval.Push(Expression.Assign(Expression.ArrayAccess(eval.Pop(), idx), rhs));
+                        break;
                     case OpType.Sub:
                         rhs = eval.Pop();
                         eval.Push(Expression.Subtract(eval.Pop(), rhs));
@@ -355,7 +371,7 @@ namespace CIL.Expressions
                         eval.Push(Expression.Unbox(eval.Pop(), x.ResolveType()));
                         break;
                     default:
-                        throw new ArgumentException("Can't translate CIL to Expression: " + x.ToString(), "instr");
+                        throw new ArgumentException("Can't translate CIL to Expression: " + x.ToString(), "il");
                 }
             }
         }
