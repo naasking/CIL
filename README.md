@@ -58,7 +58,7 @@ CIL.Expressions should currently decompile any CIL that doesn't use:
 
  * unverifiable or odd instructions: jmp, arglist, prefix*
  * address instructions, ie. ldarga, ldelema, ldflda, ldloca, ldobj, localloc, refanyval, cpblk, cpobj, initblk, initobj, etc.
- * branch instructions: temporary limitation until I fill this out.
+ * branching and exception handling instructions: temporary limitation until I fill this out.
 
 # Future Work
 
