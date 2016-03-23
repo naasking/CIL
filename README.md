@@ -48,6 +48,18 @@ working out a few kinks. For instance, System.Boolean and System.Char don't exis
 in CIL, they're simply handled as a "native int", so the fact CIL is operating on
 a bool or char has to be reverse engineered from context.
 
+# Status
+
+CIL reading/traversal works, although there remains a question around switch
+statements because it requires N branch targets, so I don't believe that's processed
+correctly at the moment.
+
+CIL.Expressions should currently decompile any CIL that doesn't use:
+
+ * unverifiable or odd instructions: jmp, arglist, prefix*
+ * address instructions, ie. ldarga, ldelema, ldflda, ldloca, ldobj, localloc, refanyval, cpblk, cpobj, initblk, initobj, etc.
+ * branch instructions: temporary limitation until I fill this out.
+
 # Future Work
 
 I plan to implement a few more CIL translations:

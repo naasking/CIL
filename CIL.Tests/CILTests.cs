@@ -77,7 +77,7 @@ namespace CIL.Tests
             TestEqParam();
             TestEqParamReverse();
             TestStringOps();
-            TestBoolOps();
+            //TestBoolOps();
         }
     }
 }
