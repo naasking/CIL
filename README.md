@@ -60,6 +60,9 @@ CIL.Expressions should currently decompile any CIL that doesn't use:
  * address instructions, ie. ldarga, ldelema, ldflda, ldloca, ldobj, localloc, refanyval, cpblk, cpobj, initblk, initobj, stind, etc.
  * branching and exception handling instructions: temporary limitation until I fill this out.
 
+Please do let me know if you find some mistaken in the translation or some
+undocumented limitation.
+
 # Future Work
 
 I plan to implement a few more CIL translations:
