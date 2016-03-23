@@ -65,7 +65,7 @@ namespace CIL
                 case OperandType.InlineField:
                 case OperandType.InlineType:
                 case OperandType.InlineTok:
-                case OperandType.InlineSwitch:
+                case OperandType.InlineSwitch: //FIXME: I think the switch may be longer
                     arg = new Operand(BitConverter.ToInt32(code, i));
                     i += 4;
                     break;
