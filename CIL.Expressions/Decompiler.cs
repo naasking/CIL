@@ -325,7 +325,7 @@ namespace CIL.Expressions
                     case OpType.Shr:
                     case OpType.Shr_un:
                         rhs = eval.Pop();
-                        eval.Push(Expression.LeftShift(eval.Pop(), rhs));
+                        eval.Push(Expression.RightShift(eval.Pop(), rhs));
                         break;
                     case OpType.Sizeof:
                         eval.Push(Expression.Constant(Marshal.SizeOf(x.ResolveType())));
