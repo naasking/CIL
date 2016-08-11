@@ -1,16 +1,19 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <package xmlns="http://schemas.microsoft.com/packaging/2010/07/nuspec.xsd">
   <metadata>
-    <id>CIL</id>
-    <version>0.1.0</version>
+    <id>CIL.NET</id>
+    <title>CIL bytecode processing library</title>
+    <version>$vers$</version>
     <authors>Sandro Magi</authors>
     <description>A lightweight CIL byecode processing library.</description>
     <language>en-US</language>
     <projectUrl>https://github.com/naasking/CIL</projectUrl>
     <licenseUrl>https://github.com/naasking/CIL/blob/master/LICENSE</licenseUrl>
+    <copyright>Copyright Sandro Magi 2016</copyright>
+    <tags>il cil assembly bytecode reflection disassembler</tags>
+  </metadata>
 	<files>
 		<file src="..\CIL\bin\Release\*.dll" target="lib\net40" />
 		<file src="..\CIL\bin\Release\*.xml" target="lib\net40" />
 	</files>
-  </metadata>
 </package>
