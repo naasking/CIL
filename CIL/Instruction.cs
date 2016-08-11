@@ -8,105 +8,202 @@ using System.Runtime.InteropServices;
 
 namespace CIL
 {
+    /// <summary>
+    /// The operand of an instruction.
+    /// </summary>
     [StructLayout(LayoutKind.Explicit)]
     public struct Operand
     {
-        [FieldOffset(0)]
-        public readonly double Float64;
-        [FieldOffset(4)]
-        public readonly float Float32;
-        [FieldOffset(0)]
-        public readonly long Int64;
-        [FieldOffset(0)]
-        public readonly ulong UInt64;
-        [FieldOffset(0)]
-        public readonly int Int32;
-        [FieldOffset(0)]
-        public readonly uint UInt32;
-        [FieldOffset(0)]
-        public readonly short Int16;
-        [FieldOffset(0)]
-        public readonly ushort UInt16;
-        [FieldOffset(0)]
-        public readonly sbyte Int8;
-        [FieldOffset(0)]
-        public readonly byte UInt8;
-        [FieldOffset(0)]
-        public readonly char Char;
+        /// <summary>
+        /// The operand value.
+        /// </summary>
+        [FieldOffset(0)] public readonly double Float64;
+        /// <summary>
+        /// The operand value.
+        /// </summary>
+        [FieldOffset(4)] public readonly float Float32;
+        /// <summary>
+        /// The operand value.
+        /// </summary>
+        [FieldOffset(0)] public readonly long Int64;
+        /// <summary>
+        /// The operand value.
+        /// </summary>
+        [FieldOffset(0)] public readonly ulong UInt64;
+        /// <summary>
+        /// The operand value.
+        /// </summary>
+        [FieldOffset(0)] public readonly int Int32;
+        /// <summary>
+        /// The operand value.
+        /// </summary>
+        [FieldOffset(0)] public readonly uint UInt32;
+        /// <summary>
+        /// The operand value.
+        /// </summary>
+        [FieldOffset(0)] public readonly short Int16;
+        /// <summary>
+        /// The operand value.
+        /// </summary>
+        [FieldOffset(0)] public readonly ushort UInt16;
+        /// <summary>
+        /// The operand value.
+        /// </summary>
+        [FieldOffset(0)] public readonly sbyte Int8;
+        /// <summary>
+        /// The operand value.
+        /// </summary>
+        [FieldOffset(0)] public readonly byte UInt8;
+        /// <summary>
+        /// The operand value.
+        /// </summary>
+        [FieldOffset(0)] public readonly char Char;
 
-        // use Module.Resolve* to extract the string, fields, methods, or other values.
-        [FieldOffset(0)]
-        public readonly int MetadataToken;
+        /// <summary>
+        /// The operand value.
+        /// </summary>
+        /// <remarks>Use Module.Resolve* to extract the string, fields, methods, or other values.</remarks>
+        [FieldOffset(0)] public readonly int MetadataToken;
 
+        /// <summary>
+        /// Construct an operand from a value.
+        /// </summary>
+        /// <param name="x">The operand value.</param>
         public Operand(int x)
             : this()
         {
             this.Int32 = x;
         }
+        /// <summary>
+        /// Construct an operand from a value.
+        /// </summary>
+        /// <param name="x">The operand value.</param>
         public Operand(uint x)
             : this()
         {
             this.UInt32 = x;
         }
+        /// <summary>
+        /// Construct an operand from a value.
+        /// </summary>
+        /// <param name="x">The operand value.</param>
         public Operand(short x)
             : this()
         {
             this.Int16 = x;
         }
+        /// <summary>
+        /// Construct an operand from a value.
+        /// </summary>
+        /// <param name="x">The operand value.</param>
         public Operand(ushort x)
             : this()
         {
             this.UInt16 = x;
         }
+        /// <summary>
+        /// Construct an operand from a value.
+        /// </summary>
+        /// <param name="x">The operand value.</param>
         public Operand(sbyte x)
             : this()
         {
             this.Int8 = x;
         }
+        /// <summary>
+        /// Construct an operand from a value.
+        /// </summary>
+        /// <param name="x">The operand value.</param>
         public Operand(byte x)
             : this()
         {
             this.UInt8 = x;
         }
+        /// <summary>
+        /// Construct an operand from a value.
+        /// </summary>
+        /// <param name="x">The operand value.</param>
         public Operand(float x)
             : this()
         {
             this.Float32 = x;
         }
+        /// <summary>
+        /// Construct an operand from a value.
+        /// </summary>
+        /// <param name="x">The operand value.</param>
         public Operand(double x)
             : this()
         {
             this.Float64 = x;
         }
+        /// <summary>
+        /// Construct an operand from a value.
+        /// </summary>
+        /// <param name="x">The operand value.</param>
         public Operand(char x)
             : this()
         {
             this.Char = x;
         }
+        /// <summary>
+        /// Construct an operand from a value.
+        /// </summary>
+        /// <param name="x">The operand value.</param>
         public static implicit operator Operand(int x)
         {
             return new Operand(x);
         }
+        /// <summary>
+        /// Construct an operand from a value.
+        /// </summary>
+        /// <param name="x">The operand value.</param>
         public static implicit operator Operand(double x)
         {
             return new Operand(x);
         }
+        /// <summary>
+        /// Construct an operand from a value.
+        /// </summary>
+        /// <param name="x">The operand value.</param>
         public static implicit operator Operand(float x)
         {
             return new Operand(x);
         }
+        /// <summary>
+        /// Construct an operand from a value.
+        /// </summary>
+        /// <param name="x">The operand value.</param>
         public static implicit operator Operand(long x)
         {
             return new Operand(x);
         }
     }
 
+    /// <summary>
+    /// A CIL instruction.
+    /// </summary>
     public struct Instruction
     {
+        /// <summary>
+        /// The instruction opcode.
+        /// </summary>
         public readonly OpCode OpCode;
+        /// <summary>
+        /// The instruction's operand, if any.
+        /// </summary>
         public readonly Operand Operand;
+        /// <summary>
+        /// The Module containing this instruction, used primarily to resolve referants.
+        /// </summary>
         public readonly Module Module;
 
+        /// <summary>
+        /// Construct an instruction.
+        /// </summary>
+        /// <param name="module">The module used to resolve referants.</param>
+        /// <param name="op">The instruction opcode.</param>
+        /// <param name="arg">The instruction operand.</param>
         public Instruction(Module module, OpCode op, Operand arg)
         {
             this.Module = module;
@@ -114,17 +211,30 @@ namespace CIL
             this.Operand = arg;
         }
 
+        /// <summary>
+        /// Construct an instruction.
+        /// </summary>
+        /// <param name="module">The module used to resolve referants.</param>
+        /// <param name="op">The instruction opcode.</param>
         public Instruction(Module module, OpCode op)
             : this(module, op, default(Operand))
         {
         }
 
+        /// <summary>
+        /// The module used to resolve referants.
+        /// </summary>
+        /// <returns></returns>
         public Module GetModule()
         {
             //return Assembly.GetCallingAssembly().ManifestModule;
             return Module;
         }
 
+        /// <summary>
+        /// Resolve the instruction's operand value.
+        /// </summary>
+        /// <returns>The operand value.</returns>
         public object Resolve()
         {
             switch (OpCode.OperandType)
@@ -155,8 +265,7 @@ namespace CIL
         /// Normalizes all the special inline instructions into a
         /// single instruction type with an argument.
         /// </summary>
-        /// <param name="op"></param>
-        /// <returns></returns>
+        /// <returns>A simplified instruction.</returns>
         public Instruction Simplify()
         {
             switch (OpCode.Type())
@@ -202,6 +311,10 @@ namespace CIL
             }
         }
 
+        /// <summary>
+        /// Resolves a field token.
+        /// </summary>
+        /// <returns>The field data.</returns>
         public FieldInfo ResolveField()
         {
             if (OpCode.OperandType != OperandType.InlineField)
@@ -209,6 +322,10 @@ namespace CIL
             return GetModule().ResolveField(Operand.MetadataToken);
         }
 
+        /// <summary>
+        /// Resolves a method token.
+        /// </summary>
+        /// <returns>The method data.</returns>
         public MethodBase ResolveMethod()
         {
             if (OpCode.OperandType != OperandType.InlineMethod)
@@ -216,6 +333,10 @@ namespace CIL
             return GetModule().ResolveMethod(Operand.MetadataToken);
         }
 
+        /// <summary>
+        /// Resolves a string token.
+        /// </summary>
+        /// <returns>The string value.</returns>
         public string ResolveString()
         {
             if (OpCode.OperandType != OperandType.InlineString)
@@ -223,6 +344,10 @@ namespace CIL
             return GetModule().ResolveString(Operand.MetadataToken);
         }
 
+        /// <summary>
+        /// Resolves a type token.
+        /// </summary>
+        /// <returns>The type data.</returns>
         public Type ResolveType()
         {
             if (OpCode.OperandType != OperandType.InlineType || OpCode.OperandType != OperandType.InlineTok)
@@ -230,6 +355,10 @@ namespace CIL
             return GetModule().ResolveType(Operand.MetadataToken);
         }
 
+        /// <summary>
+        /// Returns a string representation of the instruction.
+        /// </summary>
+        /// <returns>A string representation of the instruction.</returns>
         public override string ToString()
         {
             return OpCode.Name + " " + Resolve();
