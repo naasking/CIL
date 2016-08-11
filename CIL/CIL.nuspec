@@ -2,11 +2,15 @@
 <package xmlns="http://schemas.microsoft.com/packaging/2010/07/nuspec.xsd">
   <metadata>
     <id>CIL</id>
-    <version>0.0.1</version>
+    <version>0.1.0</version>
     <authors>Sandro Magi</authors>
     <description>A lightweight CIL byecode processing library.</description>
     <language>en-US</language>
     <projectUrl>https://github.com/naasking/CIL</projectUrl>
     <licenseUrl>https://github.com/naasking/CIL/blob/master/LICENSE</licenseUrl>
+	<files>
+		<file src="..\CIL\bin\Release\*.dll" target="lib\net40" />
+		<file src="..\CIL\bin\Release\*.xml" target="lib\net40" />
+	</files>
   </metadata>
 </package>
