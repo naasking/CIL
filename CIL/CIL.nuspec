@@ -1,0 +1,12 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2010/07/nuspec.xsd">
+  <metadata>
+    <id>CIL</id>
+    <version>0.0.1</version>
+    <authors>Sandro Magi</authors>
+    <description>A lightweight CIL byecode processing library.</description>
+    <language>en-US</language>
+    <projectUrl>https://github.com/naasking/CIL</projectUrl>
+    <licenseUrl>https://github.com/naasking/CIL/blob/master/LICENSE</licenseUrl>
+  </metadata>
+</package>
