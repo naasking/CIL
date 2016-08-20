@@ -90,7 +90,7 @@ namespace CIL
             {
                 case OperandType.InlineSwitch:
                     var count = BitConverter.ToInt32(code, i);
-                    arg = new Operand(i);
+                    arg = new Operand(new Label { pos = i });
                     i += 4 * count;
                     break;
                 case OperandType.InlineI:
@@ -133,7 +133,7 @@ namespace CIL
                     i += 1;
                     break;
             }
-            Current = new Instruction(module, op, arg, code);
+            Current = new Instruction(this, op, arg);
             return true;
         }
 
@@ -156,5 +156,44 @@ namespace CIL
         {
             i = 0;
         }
+
+        #region Internal operations on instructions
+        internal FieldInfo ResolveField(int token)
+        {
+            return module.ResolveField(token, typeContext, methodContext);
+        }
+
+        internal MethodBase ResolveMethod(int token)
+        {
+            return module.ResolveMethod(token, typeContext, methodContext);
+        }
+
+        internal string ResolveString(int token)
+        {
+            return module.ResolveString(token);
+        }
+
+        internal Type ResolveType(int token)
+        {
+            return module.ResolveType(token, typeContext, methodContext);
+        }
+
+        internal byte[] ResolveSignature(int token)
+        {
+            return module.ResolveSignature(token);
+        }
+
+        internal IEnumerable<ILReader.Label> ResolveBranches(int pos)
+        {
+            var count = BitConverter.ToInt32(code, pos);
+            pos += 4;
+            var offbase = pos + 4 * count;
+            for (int i = 0; i < count; ++i)
+            {
+                yield return new ILReader.Label { pos = offbase + BitConverter.ToInt32(code, pos) };
+                pos += 4;
+            }
+        }
+        #endregion
     }
 }

@@ -207,50 +207,33 @@ namespace CIL
         /// </summary>
         public readonly Operand Operand;
         /// <summary>
-        /// The Module containing this instruction, used primarily to resolve referants.
+        /// The ILReader that created this instruction.
         /// </summary>
-        public readonly Module Module;
-        /// <summary>
-        /// The instruction bytecode.
-        /// </summary>
-        readonly byte[] code;
+        readonly ILReader reader;
 
         /// <summary>
         /// Construct an instruction.
         /// </summary>
-        /// <param name="module">The module used to resolve referants.</param>
+        /// <param name="reader">The reader that created this instruction.</param>
         /// <param name="op">The instruction opcode.</param>
         /// <param name="arg">The instruction operand.</param>
-        /// <param name="code">The instruction bytecode.</param>
-        public Instruction(Module module, OpCode op, Operand arg, byte[] code)
+        public Instruction(ILReader reader, OpCode op, Operand arg)
         {
-            this.Module = module;
+            this.reader = reader;
             this.OpCode = op;
             this.Operand = arg;
-            this.code = code;
         }
 
         /// <summary>
         /// Construct an instruction.
         /// </summary>
-        /// <param name="module">The module used to resolve referants.</param>
+        /// <param name="reader">The reader that created this instruction.</param>
         /// <param name="op">The instruction opcode.</param>
-        /// <param name="code">The instruction bytecode.</param>
-        public Instruction(Module module, OpCode op, byte[] code)
-            : this(module, op, default(Operand), code)
+        public Instruction(ILReader reader, OpCode op)
+            : this(reader, op, default(Operand))
         {
         }
-
-        /// <summary>
-        /// The module used to resolve referants.
-        /// </summary>
-        /// <returns></returns>
-        public Module GetModule()
-        {
-            //return Assembly.GetCallingAssembly().ManifestModule;
-            return Module;
-        }
-
+        
         /// <summary>
         /// Resolve the instruction's operand value.
         /// </summary>
@@ -266,12 +249,12 @@ namespace CIL
                 case OperandType.InlineI:
                 case OperandType.InlineBrTarget: return Operand.Int32;
                 case OperandType.InlineSwitch: return Operand.MetadataToken;
-                case OperandType.InlineField: return GetModule().ResolveField(Operand.MetadataToken);
-                case OperandType.InlineMethod: return GetModule().ResolveMethod(Operand.MetadataToken);
-                case OperandType.InlineSig: return GetModule().ResolveSignature(Operand.MetadataToken);
-                case OperandType.InlineString: return GetModule().ResolveString(Operand.MetadataToken);
-                case OperandType.InlineTok: return GetModule().ResolveType(Operand.MetadataToken);
-                case OperandType.InlineType: return GetModule().ResolveType(Operand.MetadataToken);
+                case OperandType.InlineField: return ResolveField();
+                case OperandType.InlineMethod: return ResolveMethod();
+                case OperandType.InlineSig: return ResolveSignature();
+                case OperandType.InlineString: return ResolveString();
+                case OperandType.InlineTok: return ResolveType();
+                case OperandType.InlineType: return ResolveType();
                 case OperandType.InlineVar: return Operand.Int16;
                 case OperandType.ShortInlineBrTarget: return Operand.Int8;
                 case OperandType.ShortInlineI: return Operand.Int8;
@@ -286,47 +269,64 @@ namespace CIL
         /// single instruction type with an argument.
         /// </summary>
         /// <returns>A simplified instruction.</returns>
+        /// <remarks>
+        /// This method preserves the type information, so it does not modify the types
+        /// of instruction operands to simplify instructions even further.
+        /// </remarks>
         public Instruction Simplify()
         {
+            //FIXME: a future simplification might also expand redundant instructions on smaller
+            //types to the comparable type with the largest size, ie. _R4=>_R8, _I/_I1=>_I8, etc.
+            //case OpType.Ldind_i1: return new Instruction(reader, OpCodes.Ldind_I8, Operand);
+            //case OpType.Ldind_u1: return new Instruction(reader, OpCodes.Ldind_U8, Operand);
+            //...
+            //case OpType.Stelem_i1: return new Instruction(reader, OpCodes.Stelem_I8, Operand);
+            //case OpType.Stelem_i2: return new Instruction(reader, OpCodes.Stelem_I8, Operand);
+            //case OpType.Stelem_i4: return new Instruction(reader, OpCodes.Stelem_I8, Operand);
+            //...
             switch (OpCode.Type())
             {
-                case OpType.Stloc_s: return new Instruction(Module, OpCodes.Stloc, Operand, code);
-                case OpType.Stloc_0: return new Instruction(Module, OpCodes.Stloc, 0, code);
-                case OpType.Stloc_1: return new Instruction(Module, OpCodes.Stloc, 1, code);
-                case OpType.Stloc_2: return new Instruction(Module, OpCodes.Stloc, 2, code);
-                case OpType.Stloc_3: return new Instruction(Module, OpCodes.Stloc, 3, code);
-                case OpType.Ldloc_s: return new Instruction(Module, OpCodes.Ldloc, Operand, code);
-                case OpType.Ldloc_0: return new Instruction(Module, OpCodes.Ldloc, 0, code);
-                case OpType.Ldloc_1: return new Instruction(Module, OpCodes.Ldloc, 1, code);
-                case OpType.Ldloc_2: return new Instruction(Module, OpCodes.Ldloc, 2, code);
-                case OpType.Ldloc_3: return new Instruction(Module, OpCodes.Ldloc, 3, code);
-                case OpType.Ldarg_s: return new Instruction(Module, OpCodes.Ldarg, Operand, code);
-                case OpType.Ldarg_0: return new Instruction(Module, OpCodes.Ldarg, 0, code);
-                case OpType.Ldarg_1: return new Instruction(Module, OpCodes.Ldarg, 1, code);
-                case OpType.Ldarg_2: return new Instruction(Module, OpCodes.Ldarg, 2, code);
-                case OpType.Ldarg_3: return new Instruction(Module, OpCodes.Ldarg, 3, code);
-                case OpType.Ldc_i4_s: return new Instruction(Module, OpCodes.Ldc_I4, Operand, code);
-                case OpType.Ldc_i4_0: return new Instruction(Module, OpCodes.Ldc_I4, 0, code);
-                case OpType.Ldc_i4_1: return new Instruction(Module, OpCodes.Ldc_I4, 1, code);
-                case OpType.Ldc_i4_2: return new Instruction(Module, OpCodes.Ldc_I4, 2, code);
-                case OpType.Ldc_i4_3: return new Instruction(Module, OpCodes.Ldc_I4, 3, code);
-                case OpType.Ldc_i4_4: return new Instruction(Module, OpCodes.Ldc_I4, 4, code);
-                case OpType.Ldc_i4_5: return new Instruction(Module, OpCodes.Ldc_I4, 5, code);
-                case OpType.Ldc_i4_6: return new Instruction(Module, OpCodes.Ldc_I4, 6, code);
-                case OpType.Ldc_i4_7: return new Instruction(Module, OpCodes.Ldc_I4, 7, code);
-                case OpType.Ldc_i4_8: return new Instruction(Module, OpCodes.Ldc_I4, 8, code);
-                case OpType.Leave_s:  return new Instruction(Module, OpCodes.Leave, Operand, code);
-                case OpType.Brfalse_s:return new Instruction(Module, OpCodes.Brfalse, Operand, code);
-                case OpType.Brtrue_s: return new Instruction(Module, OpCodes.Brtrue, Operand, code);
-                case OpType.Br_s:     return new Instruction(Module, OpCodes.Br, Operand, code);
-                case OpType.Beq_s:    return new Instruction(Module, OpCodes.Beq, Operand, code);
-                case OpType.Bge_s:    return new Instruction(Module, OpCodes.Bge, Operand, code);
-                case OpType.Bge_un_s: return new Instruction(Module, OpCodes.Bgt_Un, Operand, code);
-                case OpType.Ble_s:    return new Instruction(Module, OpCodes.Ble, Operand, code);
-                case OpType.Ble_un_s: return new Instruction(Module, OpCodes.Ble_Un, Operand, code);
-                case OpType.Blt_s:    return new Instruction(Module, OpCodes.Blt, Operand, code);
-                case OpType.Blt_un_s: return new Instruction(Module, OpCodes.Blt_Un, Operand, code);
-                case OpType.Bne_un_s: return new Instruction(Module, OpCodes.Bne_Un, Operand, code);
+                case OpType.Starg_s: return new Instruction(reader, OpCodes.Starg, Operand);
+                case OpType.Stloc_s: return new Instruction(reader, OpCodes.Stloc, Operand);
+                case OpType.Stloc_0: return new Instruction(reader, OpCodes.Stloc, 0);
+                case OpType.Stloc_1: return new Instruction(reader, OpCodes.Stloc, 1);
+                case OpType.Stloc_2: return new Instruction(reader, OpCodes.Stloc, 2);
+                case OpType.Stloc_3: return new Instruction(reader, OpCodes.Stloc, 3);
+                case OpType.Ldloca_s: return new Instruction(reader, OpCodes.Ldloca, Operand);
+                case OpType.Ldloc_s: return new Instruction(reader, OpCodes.Ldloc, Operand);
+                case OpType.Ldloc_0: return new Instruction(reader, OpCodes.Ldloc, 0);
+                case OpType.Ldloc_1: return new Instruction(reader, OpCodes.Ldloc, 1);
+                case OpType.Ldloc_2: return new Instruction(reader, OpCodes.Ldloc, 2);
+                case OpType.Ldloc_3: return new Instruction(reader, OpCodes.Ldloc, 3);
+                case OpType.Ldarga_s: return new Instruction(reader, OpCodes.Ldarga, Operand);
+                case OpType.Ldarg_s: return new Instruction(reader, OpCodes.Ldarg, Operand);
+                case OpType.Ldarg_0: return new Instruction(reader, OpCodes.Ldarg, 0);
+                case OpType.Ldarg_1: return new Instruction(reader, OpCodes.Ldarg, 1);
+                case OpType.Ldarg_2: return new Instruction(reader, OpCodes.Ldarg, 2);
+                case OpType.Ldarg_3: return new Instruction(reader, OpCodes.Ldarg, 3);
+                case OpType.Ldc_i4_s: return new Instruction(reader, OpCodes.Ldc_I4, Operand);
+                case OpType.Ldc_i4_m1: return new Instruction(reader, OpCodes.Ldc_I4, -1);
+                case OpType.Ldc_i4_0: return new Instruction(reader, OpCodes.Ldc_I4, 0);
+                case OpType.Ldc_i4_1: return new Instruction(reader, OpCodes.Ldc_I4, 1);
+                case OpType.Ldc_i4_2: return new Instruction(reader, OpCodes.Ldc_I4, 2);
+                case OpType.Ldc_i4_3: return new Instruction(reader, OpCodes.Ldc_I4, 3);
+                case OpType.Ldc_i4_4: return new Instruction(reader, OpCodes.Ldc_I4, 4);
+                case OpType.Ldc_i4_5: return new Instruction(reader, OpCodes.Ldc_I4, 5);
+                case OpType.Ldc_i4_6: return new Instruction(reader, OpCodes.Ldc_I4, 6);
+                case OpType.Ldc_i4_7: return new Instruction(reader, OpCodes.Ldc_I4, 7);
+                case OpType.Ldc_i4_8: return new Instruction(reader, OpCodes.Ldc_I4, 8);
+                case OpType.Leave_s:  return new Instruction(reader, OpCodes.Leave, Operand);
+                case OpType.Brfalse_s:return new Instruction(reader, OpCodes.Brfalse, Operand);
+                case OpType.Brtrue_s: return new Instruction(reader, OpCodes.Brtrue, Operand);
+                case OpType.Br_s:     return new Instruction(reader, OpCodes.Br, Operand);
+                case OpType.Beq_s:    return new Instruction(reader, OpCodes.Beq, Operand);
+                case OpType.Bge_s:    return new Instruction(reader, OpCodes.Bge, Operand);
+                case OpType.Bge_un_s: return new Instruction(reader, OpCodes.Bgt_Un, Operand);
+                case OpType.Ble_s:    return new Instruction(reader, OpCodes.Ble, Operand);
+                case OpType.Ble_un_s: return new Instruction(reader, OpCodes.Ble_Un, Operand);
+                case OpType.Blt_s:    return new Instruction(reader, OpCodes.Blt, Operand);
+                case OpType.Blt_un_s: return new Instruction(reader, OpCodes.Blt_Un, Operand);
+                case OpType.Bne_un_s: return new Instruction(reader, OpCodes.Bne_Un, Operand);
                 default:              return this;
             }
         }
@@ -339,7 +339,7 @@ namespace CIL
         {
             if (OpCode.OperandType != OperandType.InlineField)
                 throw new InvalidOperationException("Instruction does not reference a field.");
-            return GetModule().ResolveField(Operand.MetadataToken);
+            return reader.ResolveField(Operand.MetadataToken);
         }
 
         /// <summary>
@@ -350,7 +350,7 @@ namespace CIL
         {
             if (OpCode.OperandType != OperandType.InlineMethod)
                 throw new InvalidOperationException("Instruction does not reference a method.");
-            return GetModule().ResolveMethod(Operand.MetadataToken);
+            return reader.ResolveMethod(Operand.MetadataToken);
         }
 
         /// <summary>
@@ -361,7 +361,7 @@ namespace CIL
         {
             if (OpCode.OperandType != OperandType.InlineString)
                 throw new InvalidOperationException("Instruction does not reference a string.");
-            return GetModule().ResolveString(Operand.MetadataToken);
+            return reader.ResolveString(Operand.MetadataToken);
         }
 
         /// <summary>
@@ -372,7 +372,18 @@ namespace CIL
         {
             if (OpCode.OperandType != OperandType.InlineType || OpCode.OperandType != OperandType.InlineTok)
                 throw new InvalidOperationException("Instruction does not reference a type or token.");
-            return GetModule().ResolveType(Operand.MetadataToken);
+            return reader.ResolveType(Operand.MetadataToken);
+        }
+
+        /// <summary>
+        /// Resolves a type token.
+        /// </summary>
+        /// <returns>The type data.</returns>
+        public byte[] ResolveSignature()
+        {
+            if (OpCode.OperandType != OperandType.InlineSig)
+                throw new InvalidOperationException("Instruction does not reference a signature.");
+            return reader.ResolveSignature(Operand.MetadataToken);
         }
 
         /// <summary>
@@ -381,17 +392,7 @@ namespace CIL
         /// <returns></returns>
         public IEnumerable<ILReader.Label> ResolveBranches()
         {
-            if (OpCode.OperandType != OperandType.InlineSwitch)
-                throw new InvalidOperationException("Instruction.ResolveBranches can only be called on OpCode.Switch instructions.");
-            var pos = Operand.Int32;
-            var count = BitConverter.ToInt32(code, pos);
-            pos += 4;
-            var offbase = pos + 4 * count;
-            for (int i = 0; i < count; ++i)
-            {
-                yield return new ILReader.Label { pos = offbase + BitConverter.ToInt32(code, pos) };
-                pos += 4;
-            }
+            return reader.ResolveBranches(Operand.Int32);
         }
 
         /// <summary>
