@@ -25,15 +25,13 @@ namespace CIL
         public ILReader(MethodBase method)
         {
             if (method == null) throw new ArgumentNullException("method");
-            var body = method.GetMethodBody();
-            var args = method.GetParameters();
-            var module = method.Module;
-            this.module = module;
+            this.module = method.Module;
             this.methodContext = method.IsConstructor ? null : method.GetGenericArguments();
             this.typeContext = method.DeclaringType.GetGenericArguments();
-            this.Locals = body.LocalVariables;
-            this.Args = args;
-            this.code = body.GetILAsByteArray();
+            this.Args = method.GetParameters();
+            var body = method.GetMethodBody();
+            this.Locals = body?.LocalVariables ?? new List<LocalVariableInfo>(0);
+            this.code = body?.GetILAsByteArray() ?? new byte[0];
         }
 
         /// <summary>
