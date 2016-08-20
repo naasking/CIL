@@ -348,7 +348,7 @@ namespace CIL
         /// <returns>The field data.</returns>
         public FieldInfo ResolveField()
         {
-            if (OpCode.OperandType != OperandType.InlineField || OpCode.OperandType != OperandType.InlineTok)
+            if (OpCode.OperandType != OperandType.InlineField && OpCode.OperandType != OperandType.InlineTok)
                 throw new InvalidOperationException("Instruction does not reference a field.");
             return reader.ResolveField(Operand.MetadataToken);
         }
@@ -359,7 +359,7 @@ namespace CIL
         /// <returns>The method data.</returns>
         public MethodBase ResolveMethod()
         {
-            if (OpCode.OperandType != OperandType.InlineMethod || OpCode.OperandType != OperandType.InlineTok)
+            if (OpCode.OperandType != OperandType.InlineMethod && OpCode.OperandType != OperandType.InlineTok)
                 throw new InvalidOperationException("Instruction does not reference a method.");
             return reader.ResolveMethod(Operand.MetadataToken);
         }
@@ -381,7 +381,7 @@ namespace CIL
         /// <returns>The type data.</returns>
         public Type ResolveType()
         {
-            if (OpCode.OperandType != OperandType.InlineType || OpCode.OperandType != OperandType.InlineTok)
+            if (OpCode.OperandType != OperandType.InlineType && OpCode.OperandType != OperandType.InlineTok)
                 throw new InvalidOperationException("Instruction does not reference a type or token.");
             return reader.ResolveType(Operand.MetadataToken);
         }
