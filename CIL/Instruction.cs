@@ -58,6 +58,10 @@ namespace CIL
         /// The operand value.
         /// </summary>
         [FieldOffset(0)] public readonly char Char;
+        /// <summary>
+        /// The operand value.
+        /// </summary>
+        [FieldOffset(0)] public readonly ILReader.Label Label;
 
         /// <summary>
         /// The operand value.
@@ -65,6 +69,15 @@ namespace CIL
         /// <remarks>Use Module.Resolve* to extract the string, fields, methods, or other values.</remarks>
         [FieldOffset(0)] public readonly int MetadataToken;
 
+        /// <summary>
+        /// Construct an operand from a value.
+        /// </summary>
+        /// <param name="x">The operand value.</param>
+        public Operand(ILReader.Label x)
+            : this()
+        {
+            this.Label = x;
+        }
         /// <summary>
         /// Construct an operand from a value.
         /// </summary>
@@ -197,6 +210,10 @@ namespace CIL
         /// The Module containing this instruction, used primarily to resolve referants.
         /// </summary>
         public readonly Module Module;
+        /// <summary>
+        /// The instruction bytecode.
+        /// </summary>
+        readonly byte[] code;
 
         /// <summary>
         /// Construct an instruction.
@@ -204,11 +221,13 @@ namespace CIL
         /// <param name="module">The module used to resolve referants.</param>
         /// <param name="op">The instruction opcode.</param>
         /// <param name="arg">The instruction operand.</param>
-        public Instruction(Module module, OpCode op, Operand arg)
+        /// <param name="code">The instruction bytecode.</param>
+        public Instruction(Module module, OpCode op, Operand arg, byte[] code)
         {
             this.Module = module;
             this.OpCode = op;
             this.Operand = arg;
+            this.code = code;
         }
 
         /// <summary>
@@ -216,8 +235,9 @@ namespace CIL
         /// </summary>
         /// <param name="module">The module used to resolve referants.</param>
         /// <param name="op">The instruction opcode.</param>
-        public Instruction(Module module, OpCode op)
-            : this(module, op, default(Operand))
+        /// <param name="code">The instruction bytecode.</param>
+        public Instruction(Module module, OpCode op, byte[] code)
+            : this(module, op, default(Operand), code)
         {
         }
 
@@ -270,43 +290,43 @@ namespace CIL
         {
             switch (OpCode.Type())
             {
-                case OpType.Stloc_s: return new Instruction(Module, OpCodes.Stloc, Operand);
-                case OpType.Stloc_0: return new Instruction(Module, OpCodes.Stloc, 0);
-                case OpType.Stloc_1: return new Instruction(Module, OpCodes.Stloc, 1);
-                case OpType.Stloc_2: return new Instruction(Module, OpCodes.Stloc, 2);
-                case OpType.Stloc_3: return new Instruction(Module, OpCodes.Stloc, 3);
-                case OpType.Ldloc_s: return new Instruction(Module, OpCodes.Ldloc, Operand);
-                case OpType.Ldloc_0: return new Instruction(Module, OpCodes.Ldloc, 0);
-                case OpType.Ldloc_1: return new Instruction(Module, OpCodes.Ldloc, 1);
-                case OpType.Ldloc_2: return new Instruction(Module, OpCodes.Ldloc, 2);
-                case OpType.Ldloc_3: return new Instruction(Module, OpCodes.Ldloc, 3);
-                case OpType.Ldarg_s: return new Instruction(Module, OpCodes.Ldarg, Operand);
-                case OpType.Ldarg_0: return new Instruction(Module, OpCodes.Ldarg, 0);
-                case OpType.Ldarg_1: return new Instruction(Module, OpCodes.Ldarg, 1);
-                case OpType.Ldarg_2: return new Instruction(Module, OpCodes.Ldarg, 2);
-                case OpType.Ldarg_3: return new Instruction(Module, OpCodes.Ldarg, 3);
-                case OpType.Ldc_i4_s: return new Instruction(Module, OpCodes.Ldc_I4, Operand);
-                case OpType.Ldc_i4_0: return new Instruction(Module, OpCodes.Ldc_I4, 0);
-                case OpType.Ldc_i4_1: return new Instruction(Module, OpCodes.Ldc_I4, 1);
-                case OpType.Ldc_i4_2: return new Instruction(Module, OpCodes.Ldc_I4, 2);
-                case OpType.Ldc_i4_3: return new Instruction(Module, OpCodes.Ldc_I4, 3);
-                case OpType.Ldc_i4_4: return new Instruction(Module, OpCodes.Ldc_I4, 4);
-                case OpType.Ldc_i4_5: return new Instruction(Module, OpCodes.Ldc_I4, 5);
-                case OpType.Ldc_i4_6: return new Instruction(Module, OpCodes.Ldc_I4, 6);
-                case OpType.Ldc_i4_7: return new Instruction(Module, OpCodes.Ldc_I4, 7);
-                case OpType.Ldc_i4_8: return new Instruction(Module, OpCodes.Ldc_I4, 8);
-                case OpType.Leave_s:  return new Instruction(Module, OpCodes.Leave, Operand);
-                case OpType.Brfalse_s:return new Instruction(Module, OpCodes.Brfalse, Operand);
-                case OpType.Brtrue_s: return new Instruction(Module, OpCodes.Brtrue, Operand);
-                case OpType.Br_s:     return new Instruction(Module, OpCodes.Br, Operand);
-                case OpType.Beq_s:    return new Instruction(Module, OpCodes.Beq, Operand);
-                case OpType.Bge_s:    return new Instruction(Module, OpCodes.Bge, Operand);
-                case OpType.Bge_un_s: return new Instruction(Module, OpCodes.Bgt_Un, Operand);
-                case OpType.Ble_s:    return new Instruction(Module, OpCodes.Ble, Operand);
-                case OpType.Ble_un_s: return new Instruction(Module, OpCodes.Ble_Un, Operand);
-                case OpType.Blt_s:    return new Instruction(Module, OpCodes.Blt, Operand);
-                case OpType.Blt_un_s: return new Instruction(Module, OpCodes.Blt_Un, Operand);
-                case OpType.Bne_un_s: return new Instruction(Module, OpCodes.Bne_Un, Operand);
+                case OpType.Stloc_s: return new Instruction(Module, OpCodes.Stloc, Operand, code);
+                case OpType.Stloc_0: return new Instruction(Module, OpCodes.Stloc, 0, code);
+                case OpType.Stloc_1: return new Instruction(Module, OpCodes.Stloc, 1, code);
+                case OpType.Stloc_2: return new Instruction(Module, OpCodes.Stloc, 2, code);
+                case OpType.Stloc_3: return new Instruction(Module, OpCodes.Stloc, 3, code);
+                case OpType.Ldloc_s: return new Instruction(Module, OpCodes.Ldloc, Operand, code);
+                case OpType.Ldloc_0: return new Instruction(Module, OpCodes.Ldloc, 0, code);
+                case OpType.Ldloc_1: return new Instruction(Module, OpCodes.Ldloc, 1, code);
+                case OpType.Ldloc_2: return new Instruction(Module, OpCodes.Ldloc, 2, code);
+                case OpType.Ldloc_3: return new Instruction(Module, OpCodes.Ldloc, 3, code);
+                case OpType.Ldarg_s: return new Instruction(Module, OpCodes.Ldarg, Operand, code);
+                case OpType.Ldarg_0: return new Instruction(Module, OpCodes.Ldarg, 0, code);
+                case OpType.Ldarg_1: return new Instruction(Module, OpCodes.Ldarg, 1, code);
+                case OpType.Ldarg_2: return new Instruction(Module, OpCodes.Ldarg, 2, code);
+                case OpType.Ldarg_3: return new Instruction(Module, OpCodes.Ldarg, 3, code);
+                case OpType.Ldc_i4_s: return new Instruction(Module, OpCodes.Ldc_I4, Operand, code);
+                case OpType.Ldc_i4_0: return new Instruction(Module, OpCodes.Ldc_I4, 0, code);
+                case OpType.Ldc_i4_1: return new Instruction(Module, OpCodes.Ldc_I4, 1, code);
+                case OpType.Ldc_i4_2: return new Instruction(Module, OpCodes.Ldc_I4, 2, code);
+                case OpType.Ldc_i4_3: return new Instruction(Module, OpCodes.Ldc_I4, 3, code);
+                case OpType.Ldc_i4_4: return new Instruction(Module, OpCodes.Ldc_I4, 4, code);
+                case OpType.Ldc_i4_5: return new Instruction(Module, OpCodes.Ldc_I4, 5, code);
+                case OpType.Ldc_i4_6: return new Instruction(Module, OpCodes.Ldc_I4, 6, code);
+                case OpType.Ldc_i4_7: return new Instruction(Module, OpCodes.Ldc_I4, 7, code);
+                case OpType.Ldc_i4_8: return new Instruction(Module, OpCodes.Ldc_I4, 8, code);
+                case OpType.Leave_s:  return new Instruction(Module, OpCodes.Leave, Operand, code);
+                case OpType.Brfalse_s:return new Instruction(Module, OpCodes.Brfalse, Operand, code);
+                case OpType.Brtrue_s: return new Instruction(Module, OpCodes.Brtrue, Operand, code);
+                case OpType.Br_s:     return new Instruction(Module, OpCodes.Br, Operand, code);
+                case OpType.Beq_s:    return new Instruction(Module, OpCodes.Beq, Operand, code);
+                case OpType.Bge_s:    return new Instruction(Module, OpCodes.Bge, Operand, code);
+                case OpType.Bge_un_s: return new Instruction(Module, OpCodes.Bgt_Un, Operand, code);
+                case OpType.Ble_s:    return new Instruction(Module, OpCodes.Ble, Operand, code);
+                case OpType.Ble_un_s: return new Instruction(Module, OpCodes.Ble_Un, Operand, code);
+                case OpType.Blt_s:    return new Instruction(Module, OpCodes.Blt, Operand, code);
+                case OpType.Blt_un_s: return new Instruction(Module, OpCodes.Blt_Un, Operand, code);
+                case OpType.Bne_un_s: return new Instruction(Module, OpCodes.Bne_Un, Operand, code);
                 default:              return this;
             }
         }
@@ -353,6 +373,25 @@ namespace CIL
             if (OpCode.OperandType != OperandType.InlineType || OpCode.OperandType != OperandType.InlineTok)
                 throw new InvalidOperationException("Instruction does not reference a type or token.");
             return GetModule().ResolveType(Operand.MetadataToken);
+        }
+
+        /// <summary>
+        /// Resolve the set of branches in a given switch statement.
+        /// </summary>
+        /// <returns></returns>
+        public IEnumerable<ILReader.Label> ResolveBranches()
+        {
+            if (OpCode.OperandType != OperandType.InlineSwitch)
+                throw new InvalidOperationException("Instruction.ResolveBranches can only be called on OpCode.Switch instructions.");
+            var pos = Operand.Int32;
+            var count = BitConverter.ToInt32(code, pos);
+            pos += 4;
+            var offbase = pos + 4 * count;
+            for (int i = 0; i < count; ++i)
+            {
+                yield return new ILReader.Label { pos = offbase + BitConverter.ToInt32(code, pos) };
+                pos += 4;
+            }
         }
 
         /// <summary>

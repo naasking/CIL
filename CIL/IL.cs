@@ -58,7 +58,7 @@ namespace CIL
         /// <returns></returns>
         public static ILReader GetInstructions(this MethodBase code)
         {
-            return new ILReader(code.Module, code.GetMethodBody(), code.GetParameters());
+            return new ILReader(code);
         }
     }
 }

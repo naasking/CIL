@@ -13,18 +13,24 @@ namespace CIL
     public class ILReader : IEnumerator<Instruction>
     {
         Module module;
+        Type[] methodContext;
+        Type[] typeContext;
         byte[] code;
         int i;
 
         /// <summary>
         /// Construct an instance of a CIL reader.
         /// </summary>
-        /// <param name="module">The module containing the code to analyze.</param>
-        /// <param name="body">The method to analyze.</param>
-        /// <param name="args">The method parameters.</param>
-        public ILReader(Module module, MethodBody body, ParameterInfo[] args)
+        /// <param name="method">The method to analyze.</param>
+        public ILReader(MethodBase method)
         {
+            if (method == null) throw new ArgumentNullException("method");
+            var body = method.GetMethodBody();
+            var args = method.GetParameters();
+            var module = method.Module;
             this.module = module;
+            this.methodContext = method.IsConstructor ? null : method.GetGenericArguments();
+            this.typeContext = method.DeclaringType.GetGenericArguments();
             this.Locals = body.LocalVariables;
             this.Args = args;
             this.code = body.GetILAsByteArray();
@@ -82,7 +88,11 @@ namespace CIL
             var arg = default(Operand);
             switch (op.OperandType)
             {
-                case OperandType.InlineBrTarget:
+                case OperandType.InlineSwitch:
+                    var count = BitConverter.ToInt32(code, i);
+                    arg = new Operand(i);
+                    i += 4 * count;
+                    break;
                 case OperandType.InlineI:
                 case OperandType.InlineMethod:
                 case OperandType.InlineString:
@@ -90,7 +100,6 @@ namespace CIL
                 case OperandType.InlineField:
                 case OperandType.InlineType:
                 case OperandType.InlineTok:
-                case OperandType.InlineSwitch: //FIXME: I think the switch may be longer
                     arg = new Operand(BitConverter.ToInt32(code, i));
                     i += 4;
                     break;
@@ -110,14 +119,21 @@ namespace CIL
                     arg = new Operand(BitConverter.ToSingle(code, i));
                     i += 4;
                     break;
+                case OperandType.InlineBrTarget:
+                    arg = new Operand(new Label { pos = i + BitConverter.ToInt32(code, i) });
+                    i += 4;
+                    break;
                 case OperandType.ShortInlineBrTarget:
+                    arg = new Operand(new Label { pos = i + (sbyte)code[i] });
+                    i += 1;
+                    break;
                 case OperandType.ShortInlineI:
                 case OperandType.ShortInlineVar:
                     arg = new Operand(code[i]);
                     i += 1;
                     break;
             }
-            Current = new Instruction(module, op, arg);
+            Current = new Instruction(module, op, arg, code);
             return true;
         }
 
