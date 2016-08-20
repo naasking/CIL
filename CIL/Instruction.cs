@@ -253,7 +253,7 @@ namespace CIL
                 case OperandType.InlineMethod: return ResolveMethod();
                 case OperandType.InlineSig: return ResolveSignature();
                 case OperandType.InlineString: return ResolveString();
-                case OperandType.InlineTok: return ResolveType();
+                case OperandType.InlineTok: return ResolveMember();
                 case OperandType.InlineType: return ResolveType();
                 case OperandType.InlineVar: return Operand.Int16;
                 case OperandType.ShortInlineBrTarget: return Operand.Int8;
@@ -332,12 +332,23 @@ namespace CIL
         }
 
         /// <summary>
+        /// Resolves a member token.
+        /// </summary>
+        /// <returns>The method data.</returns>
+        public MemberInfo ResolveMember()
+        {
+            if (OpCode.OperandType != OperandType.InlineTok)
+                throw new InvalidOperationException("Instruction does not reference a member.");
+            return reader.ResolveMethod(Operand.MetadataToken);
+        }
+
+        /// <summary>
         /// Resolves a field token.
         /// </summary>
         /// <returns>The field data.</returns>
         public FieldInfo ResolveField()
         {
-            if (OpCode.OperandType != OperandType.InlineField)
+            if (OpCode.OperandType != OperandType.InlineField || OpCode.OperandType != OperandType.InlineTok)
                 throw new InvalidOperationException("Instruction does not reference a field.");
             return reader.ResolveField(Operand.MetadataToken);
         }
@@ -348,7 +359,7 @@ namespace CIL
         /// <returns>The method data.</returns>
         public MethodBase ResolveMethod()
         {
-            if (OpCode.OperandType != OperandType.InlineMethod)
+            if (OpCode.OperandType != OperandType.InlineMethod || OpCode.OperandType != OperandType.InlineTok)
                 throw new InvalidOperationException("Instruction does not reference a method.");
             return reader.ResolveMethod(Operand.MetadataToken);
         }
@@ -384,6 +395,23 @@ namespace CIL
             if (OpCode.OperandType != OperandType.InlineSig)
                 throw new InvalidOperationException("Instruction does not reference a signature.");
             return reader.ResolveSignature(Operand.MetadataToken);
+        }
+
+        /// <summary>
+        /// Resolves a local variable.
+        /// </summary>
+        /// <returns>The local variable referenced by this instruction.</returns>
+        public LocalVariableInfo ResolveLocal()
+        {
+            switch (OpCode.OperandType)
+            {
+                case OperandType.InlineVar:
+                    return reader.Locals[Operand.Int16];
+                case OperandType.ShortInlineVar:
+                    return reader.Locals[Operand.Int8];
+                default:
+                    throw new InvalidOperationException("Instruction does not reference a local.");
+            }
         }
 
         /// <summary>

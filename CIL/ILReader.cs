@@ -178,6 +178,11 @@ namespace CIL
             return module.ResolveType(token, typeContext, methodContext);
         }
 
+        internal MemberInfo ResolveMember(int token)
+        {
+            return module.ResolveMember(token, typeContext, methodContext);
+        }
+
         internal byte[] ResolveSignature(int token)
         {
             return module.ResolveSignature(token);
