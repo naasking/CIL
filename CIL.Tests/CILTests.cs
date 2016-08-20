@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Reflection;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -70,6 +71,40 @@ namespace CIL.Tests
         //    Assert.NotEqual(Expression.Constant(3).ToString(), decompiled.ToString());
         //}
 
+        [Fact]
+        public static void TestCalls()
+        {
+            var main = new Action<string[]>(Main);
+            var methods = typeof(CILTests).GetMethods().Where(x => x != main.Method).ToArray();
+            var il = main.Method.GetInstructions();
+            while (il.MoveNext())
+            {
+                switch (il.Current.OpCode.Type())
+                {
+                    case OpType.Call:
+                        Assert.True(methods.Contains(il.Current.ResolveMethod()));
+                        break;
+                }
+            }
+        }
+
+        [Fact]
+        public static void TestOtherCalls()
+        {
+            var target = typeof(Module).GetMethod("ResolveMethod", new[] { typeof(int), typeof(Type[]), typeof(Type[]) }, null);
+            var resolve = typeof(ILReader).GetMethod("ResolveMethod", BindingFlags.Instance | BindingFlags.NonPublic, null, new[] { typeof(int) }, null);
+            var il = resolve.GetInstructions();
+            while (il.MoveNext())
+            {
+                switch (il.Current.OpCode.Type())
+                {
+                    case OpType.Callvirt:
+                        Assert.Equal(target, il.Current.ResolveMethod());
+                        break;
+                }
+            }
+        }
+
         public static void Main(string[] args)
         {
             TestSimple();
@@ -77,6 +112,8 @@ namespace CIL.Tests
             TestEqParam();
             TestEqParamReverse();
             TestStringOps();
+            TestCalls();
+            TestOtherCalls();
             //TestBoolOps();
         }
     }
