@@ -89,7 +89,7 @@ namespace CIL
                 case OperandType.InlineSwitch:
                     var count = BitConverter.ToInt32(code, i);
                     arg = new Operand(new Label { pos = i });
-                    i += 4 * count;
+                    i += 4 + 4 * count; // skip 'count' and 32bit branch target list
                     break;
                 case OperandType.InlineI:
                 case OperandType.InlineMethod:

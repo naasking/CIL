@@ -76,7 +76,7 @@ namespace CIL.Tests
         {
             var main = new Action<string[]>(Main);
             var methods = typeof(CILTests).GetMethods().Where(x => x != main.Method).ToArray();
-            var il = main.Method.GetInstructions();
+            var il = main.Method.GetILReader();
             while (il.MoveNext())
             {
                 switch (il.Current.OpCode.Type())
@@ -93,7 +93,7 @@ namespace CIL.Tests
         {
             var target = typeof(Module).GetMethod("ResolveMethod", new[] { typeof(int), typeof(Type[]), typeof(Type[]) }, null);
             var resolve = typeof(ILReader).GetMethod("ResolveMethod", BindingFlags.Instance | BindingFlags.NonPublic, null, new[] { typeof(int) }, null);
-            var il = resolve.GetInstructions();
+            var il = resolve.GetILReader();
             while (il.MoveNext())
             {
                 switch (il.Current.OpCode.Type())

@@ -54,11 +54,23 @@ namespace CIL
         /// <summary>
         /// Get the instructions from the given method.
         /// </summary>
-        /// <param name="code"></param>
-        /// <returns></returns>
-        public static ILReader GetInstructions(this MethodBase code)
+        /// <param name="code">The method to analyze.</param>
+        /// <returns>An <seealso cref="ILReader"/> that iterates over the bytecode instructions.</returns>
+        public static ILReader GetILReader(this MethodBase code)
         {
             return new ILReader(code);
+        }
+
+        /// <summary>
+        /// Get the instructions from the given method.
+        /// </summary>
+        /// <param name="code">The method to analyze.</param>
+        /// <returns>A stream of instructions.</returns>
+        public static IEnumerable<Instruction> GetInstructions(this MethodBase code)
+        {
+            var il = new ILReader(code);
+            while (il.MoveNext())
+                yield return il.Current;
         }
     }
 }

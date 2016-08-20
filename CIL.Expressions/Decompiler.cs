@@ -21,7 +21,7 @@ namespace CIL.Expressions
             if (func == null) throw new ArgumentNullException("func");
             var f = func as Delegate;
             var eval = new Stack<Expression>();
-            var il = f.Method.GetInstructions();
+            var il = f.Method.GetILReader();
             var args = f.Method.GetParameters()
                     .Select(x => Expression.Parameter(x.ParameterType, x.Name))
                     .ToList();

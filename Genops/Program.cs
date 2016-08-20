@@ -62,7 +62,7 @@ namespace Genops
 
             //var il = CIL.IL.Read(getName.Method.Module, getName.Method.GetMethodBody().GetILAsByteArray());
             var method = new Action<string[]>(Main).Method;
-            var il = method.GetInstructions();
+            var il = method.GetILReader();
         }
     }
 }
