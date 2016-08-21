@@ -50,9 +50,8 @@ a bool or char has to be reverse engineered from context.
 
 # Status
 
-CIL reading/traversal works, although there remains a question around switch
-statements because it requires N branch targets, so I don't believe that's processed
-correctly at the moment.
+CIL reading/traversal works, now also including a nice interface for analyzing switch
+instructions.
 
 CIL.Expressions should currently decompile any CIL that doesn't use:
 

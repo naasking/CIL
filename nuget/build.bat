@@ -1,6 +1,6 @@
 @echo off
 
-set vers=0.1.0
+set vers=0.2.0
 set libs=CIL.NET
 set tools=
 set files=%tools% %libs%
