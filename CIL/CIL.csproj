@@ -37,6 +37,7 @@
     <Reference Include="Microsoft.CSharp" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="IDecompiler.cs" />
     <Compile Include="IL.cs" />
     <Compile Include="ILReader.cs" />
     <Compile Include="Instruction.cs" />

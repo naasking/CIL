@@ -84,6 +84,15 @@ namespace CIL.Expressions
                     //case OpType.Br:
                     //case OpType.Brfalse:
                     //case OpType.Brtrue:
+                    //  var cond = make-expr(OpType.instr-type);
+                    //  var elseStart = il.Mark();// save current position
+                    //  il.Seek(x.Operand.Label); // seek to _then when branch condition true
+                    //  Process(il, args, locals, eval);
+                    //  var _then = eval.Pop();   // extract _then expression
+                    //  il.Seek(elseStart);       // seek to _else whne branch condition false
+                    //  Process(il, args, locals, eval);
+                    //  var _else = eval.Pop();   // extract _else expression
+                    //  eval.Push(decompiler.If(cond, _then, _else);
                     //  break;
                     case OpType.Call:
                     case OpType.Callvirt:
