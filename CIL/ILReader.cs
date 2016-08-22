@@ -186,14 +186,15 @@ namespace CIL
             return module.ResolveSignature(token);
         }
 
-        internal IEnumerable<ILReader.Label> ResolveBranches(int pos)
+        internal IEnumerable<KeyValuePair<int, ILReader.Label>> ResolveBranches(int pos)
         {
             var count = BitConverter.ToInt32(code, pos);
             pos += 4;
-            var offbase = pos + 4 * count;
+            var basep = pos + 4 * count;
             for (int i = 0; i < count; ++i)
             {
-                yield return new ILReader.Label { pos = offbase + BitConverter.ToInt32(code, pos) };
+                var offset = BitConverter.ToInt32(code, pos);
+                yield return new KeyValuePair<int, Label>(offset, new ILReader.Label { pos = basep + offset });
                 pos += 4;
             }
         }

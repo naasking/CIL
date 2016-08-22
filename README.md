@@ -15,12 +15,12 @@ An extremely lightweight CIL bytecode processing library:
 				switch(x.OpCode.Type())
 				{
 					case OpType.Add:
-						Console.WriteLine("Add {0}", x.Operand);
+						Console.WriteLine("Add {0}", x.Operand.Int32);
 						break;
 					case OpType.Sub:
 						...
 					case OpType.Call:
-						Console.WriteLine("Call {0}", main.Module.ResolveMethod(x.Operand.MetadataToken));
+						Console.WriteLine("Call {0}", x.ResolveMethod());
 						break;
 					...
 				}
@@ -45,8 +45,8 @@ Most instructions are supported given the expanded expression types available in
 
 CIL loses some type information that is available at a higher level, so I'm still
 working out a few kinks. For instance, System.Boolean and System.Char don't exist
-in CIL, they're simply handled as a "native int", so the fact CIL is operating on
-a bool or char has to be reverse engineered from context.
+in CIL, nor do enums, they're simply handled as a "native int", so the fact CIL is
+operating on a bool or char has to be reverse engineered from context.
 
 # Status
 
@@ -56,8 +56,8 @@ instructions.
 CIL.Expressions should currently decompile any CIL that doesn't use:
 
  * unverifiable or odd instructions: jmp, arglist, prefix*
- * address instructions, ie. ldarga, ldelema, ldflda, ldloca, ldobj, localloc, refanyval, cpblk, cpobj, initblk, initobj, stind, etc.
- * branching and exception handling instructions: temporary limitation until I fill this out.
+ * address instructions, ie. ldarga, ldelema, ldflda, ldloca, ldobj, localloc, refanyval, cpblk, cpobj, initblk, initobj, etc.
+ * exception handling instructions: temporary limitation until I fill this out.
 
 Please do let me know if you find some mistaken in the translation or some
 undocumented limitation.

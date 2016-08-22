@@ -17,7 +17,7 @@ namespace CIL.Tests
         {
             Func<int> foo = () => 3;
             Expression<Func<int>> fooe = () => 3;
-            var decompiled = foo.GetExpression();
+            var decompiled = LinqDecompiler.Decompile(foo);
             Assert.Equal(fooe.ToString(), decompiled.ToString());
             Assert.NotEqual(Expression.Constant(3).ToString(), decompiled.ToString());
         }
@@ -26,7 +26,7 @@ namespace CIL.Tests
         {
             Func<bool> foo = () => 3 != 5;
             Expression<Func<bool>> fooe = () => true;
-            var decompiled = foo.GetExpression();
+            var decompiled = LinqDecompiler.Decompile(foo);
             Assert.Equal(fooe.ToString(), decompiled.ToString());
             Assert.NotEqual(Expression.Constant(3).ToString(), decompiled.ToString());
         }
@@ -36,7 +36,7 @@ namespace CIL.Tests
         {
             Func<int, bool> foo = x => 3 != x;
             Expression<Func<int, bool>> fooe = x => 3 != x;
-            var decompiled = foo.GetExpression();
+            var decompiled = LinqDecompiler.Decompile(foo);
             Assert.Equal(fooe.ToString(), decompiled.ToString());
             Assert.NotEqual(Expression.Constant(3).ToString(), decompiled.ToString());
         }
@@ -46,9 +46,22 @@ namespace CIL.Tests
         {
             Func<int, bool> foo = x => x != 3;
             Expression<Func<int, bool>> fooe = x => x != 3;
-            var decompiled = foo.GetExpression();
+            var decompiled = LinqDecompiler.Decompile(foo);
             Assert.Equal(fooe.ToString(), decompiled.ToString());
             Assert.NotEqual(Expression.Constant(3).ToString(), decompiled.ToString());
+        }
+        [Fact]
+        public static void TestSwitch()
+        {
+            Func<int, bool> foo = x =>
+            {
+                switch (x)
+                {
+                    case 0: return true;
+                    default: return false;
+                };
+            };
+            var decompiled = LinqDecompiler.Decompile(foo);
         }
 
         [Fact]
@@ -56,7 +69,7 @@ namespace CIL.Tests
         {
             Func<string, string> foo = x => x.Substring(3).Replace(';', ':').PadRight(3);
             Expression<Func<string, string>> fooe = x => x.Substring(3).Replace(';', ':').PadRight(3);
-            var decompiled = foo.GetExpression();
+            var decompiled = LinqDecompiler.Decompile(foo);
             Assert.Equal(fooe.ToString(), decompiled.ToString());
             Assert.NotEqual(Expression.Constant(3).ToString(), decompiled.ToString());
         }
@@ -115,6 +128,7 @@ namespace CIL.Tests
             TestCalls();
             TestOtherCalls();
             //TestBoolOps();
+            //TestSwitch();
         }
     }
 }

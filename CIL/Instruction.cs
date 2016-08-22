@@ -418,7 +418,7 @@ namespace CIL
         /// Resolve the set of branches in a given switch statement.
         /// </summary>
         /// <returns></returns>
-        public IEnumerable<ILReader.Label> ResolveBranches()
+        public IEnumerable<KeyValuePair<int, ILReader.Label>> ResolveBranches()
         {
             return reader.ResolveBranches(Operand.Int32);
         }
