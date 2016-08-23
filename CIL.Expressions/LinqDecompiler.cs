@@ -228,7 +228,7 @@ namespace CIL.Expressions
             return Expression.ExclusiveOr(left, right);
         }
 
-        public override Type Typeof(Expression exp)
+        public override Type TypeOf(Expression exp)
         {
             return exp.Type;
         }
@@ -236,7 +236,7 @@ namespace CIL.Expressions
         {
             return exp is ConstantExpression;
         }
-        public override object ValueOf(Expression exp)
+        public override object Value(Expression exp)
         {
             var c = exp as ConstantExpression;
             if (c == null) throw new InvalidCastException("Expression is not a constant.");

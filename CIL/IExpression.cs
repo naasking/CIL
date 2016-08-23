@@ -69,6 +69,8 @@ namespace CIL
         T Jump(MethodBase target);
         T AddressGet(T address);
         T AddressSet(T address, T value);
+        T AddressOf(T binding);
+        T LocalAlloc(T bytes);
         T ArgumentList();
         T ObjectInit(T address, Type objType);
         T BlockInit(T address, T value, T count);
@@ -83,8 +85,8 @@ namespace CIL
         //void Constrain(Type type);
 
         // extract info from expressions
-        Type Typeof(T exp);
+        Type TypeOf(T exp);
         bool IsConstant(T exp);
-        object ValueOf(T exp);
+        object Value(T exp);
     }
 }

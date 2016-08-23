@@ -62,6 +62,8 @@ namespace CIL
         public virtual T Jump(MethodBase target) { throw new NotSupportedException(); }
         public virtual T AddressGet(T address) { throw new NotSupportedException(); }
         public virtual T AddressSet(T address, T value) { throw new NotSupportedException(); }
+        public virtual T AddressOf(T binding) { throw new NotSupportedException(); }
+        public virtual T LocalAlloc(T bytes) { throw new NotSupportedException(); }
         public virtual T ArgumentList() { throw new NotSupportedException(); }
         public virtual T ObjectInit(T address, Type objType) { throw new NotSupportedException(); }
         public virtual T BlockInit(T address, T value, T count) { throw new NotSupportedException(); }
@@ -76,8 +78,8 @@ namespace CIL
         //void Constrain(Type type) { throw new NotSupportedException(); }
 
         // extract info from expressions
-        public virtual Type Typeof(T exp) { throw new NotSupportedException(); }
+        public virtual Type TypeOf(T exp) { throw new NotSupportedException(); }
         public virtual bool IsConstant(T exp) { throw new NotSupportedException(); }
-        public virtual object ValueOf(T exp) { throw new NotSupportedException(); }
+        public virtual object Value(T exp) { throw new NotSupportedException(); }
     }
 }

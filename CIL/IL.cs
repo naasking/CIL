@@ -260,13 +260,15 @@ namespace CIL
                         goto case OpType.Brtrue;
                     case OpType.Brtrue:
                     case OpType.Brtrue_s:
-                        //FIXME: should support if-then and if-then-else by checking whether the mark for
-                        //the _else branch == il.Mark() after traversing the _then branch
+                        //FIXME: this duplicates expressions for every branch instead of unifying them. Need
+                        //to track a Dictionary<Label, T>, and should skip Process() calls if the Label
+                        //already exists (and patch it in with a goto).
                         var cond = eval.Pop();
                         if (!il.MoveNext())
                             throw new InvalidOperationException("Expected an instruction after branch!");
                         var elseStart = il.Mark();// save current position
-                        il.Seek(x.Operand.Label); // seek to _then when branch condition true
+                        var thenStart = x.Operand.Label;
+                        il.Seek(thenStart);       // seek to _then when branch condition true
                         Process(il, exp, eval, args, locals);
                         var _then = eval.Pop();   // extract _then expression
                         il.Seek(elseStart);       // seek to _else when branch condition false
@@ -289,6 +291,9 @@ namespace CIL
                         il.Seek(swt);
                         break;
 #if DEBUG
+                    //FIXME: extend ILReader to support consulting exception handling blocks:
+                    //  method.GetMethodBody().ExceptionHandlingClauses[0].TryOffset/TryLength/HandlerOffset
+                    //
                     case OpType.Leave:
                     case OpType.Leave_s:
                         //FIXME: should leave be treated differently from br?
@@ -303,7 +308,6 @@ namespace CIL
                     //break;
                     case OpType.Endfinally:
                         return;
-                    //FIXME: how do I start a try-catch-finally block?
                     //case OpType.Try:
                     //    Process(il, exp, eval, args, locals);
                     //    var leaveTry = eval.Pop();
@@ -379,6 +383,22 @@ namespace CIL
                     case OpType.Sizeof:
                         eval.Push(exp.SizeOf(x.ResolveType()));
                         break;
+                    case OpType.Localloc:
+                        eval.Push(exp.LocalAlloc(eval.Pop()));
+                        break;
+                    case OpType.Ldsflda:
+                    case OpType.Ldflda:
+                        var afield = x.ResolveField();
+                        eval.Push(exp.AddressOf(exp.Field(afield, afield.IsStatic ? default(T) : eval.Pop())));
+                        break;
+                    case OpType.Ldarga:
+                    case OpType.Ldarga_s:
+                        eval.Push(exp.AddressOf(args[x.Operand.Int16]));
+                        break;
+                    case OpType.Ldloca:
+                    case OpType.Ldloca_s:
+                        eval.Push(exp.AddressOf(locals[x.Operand.Int16]));
+                        break;
                     case OpType.Ldarg:
                     case OpType.Ldarg_s:
                         eval.Push(args[x.Operand.Int16]);
@@ -444,8 +464,8 @@ namespace CIL
                         break;
                     case OpType.Ldfld:
                     case OpType.Ldsfld:
-                        var field = x.ResolveField();
-                        eval.Push(exp.Field(field, field.IsStatic ? default(T) : eval.Pop()));
+                        var lfield = x.ResolveField();
+                        eval.Push(exp.Field(lfield, lfield.IsStatic ? default(T) : eval.Pop()));
                         return;
                     case OpType.Ldlen:
                         eval.Push(exp.ArrayLength(eval.Pop()));
@@ -489,6 +509,12 @@ namespace CIL
                     case OpType.Stobj:
                         rhs = eval.Pop();
                         eval.Push(exp.Assign(eval.Pop(), rhs));
+                        break;
+                    case OpType.Stsfld:
+                    case OpType.Stfld:
+                        var sfield = x.ResolveField();
+                        rhs = eval.Pop();
+                        eval.Push(exp.Assign(exp.Field(sfield, sfield.IsStatic ? default(T) : eval.Pop()), rhs));
                         break;
                     case OpType.Ldnull:
                         eval.Push(exp.Constant<object>(null));
@@ -537,9 +563,26 @@ namespace CIL
                         eval.Push(exp.ArraySet(eval.Pop(), idx, rhs));
                         break;
                     case OpType.Ldind_ref:
+                    case OpType.Ldind_i:
+                    case OpType.Ldind_i1:
+                    case OpType.Ldind_i2:
+                    case OpType.Ldind_i4:
+                    case OpType.Ldind_i8:
+                    case OpType.Ldind_r4:
+                    case OpType.Ldind_r8:
+                    case OpType.Ldind_u1:
+                    case OpType.Ldind_u2:
+                    case OpType.Ldind_u4:
                         eval.Push(exp.AddressGet(eval.Pop()));
                         break;
                     case OpType.Stind_ref:
+                    case OpType.Stind_i:
+                    case OpType.Stind_i1:
+                    case OpType.Stind_i2:
+                    case OpType.Stind_i4:
+                    case OpType.Stind_i8:
+                    case OpType.Stind_r4:
+                    case OpType.Stind_r8:
                         rhs = eval.Pop();
                         eval.Push(exp.AddressSet(eval.Pop(), rhs));
                         break;
@@ -555,8 +598,8 @@ namespace CIL
                         // a bool is a native int in CIL, and != is a comparison against 0
                         rhs = eval.Pop();
                         var lhs = eval.Pop();
-                        var tyleft = exp.Typeof(lhs);
-                        var tyright = exp.Typeof(rhs);
+                        var tyleft = exp.TypeOf(lhs);
+                        var tyright = exp.TypeOf(rhs);
                         if (tyleft != typeof(bool) || tyleft == tyright)
                         {
                             eval.Push(exp.Equal(lhs, rhs));
@@ -585,7 +628,7 @@ namespace CIL
                         eval.Push(exp.LessThan(eval.Pop(), rhs));
                         break;
                     case OpType.Ckfinite:
-                        var isInfinity = exp.Typeof(eval.Peek()) == typeof(float) ? r4IsInfinity : r8IsInfinity;
+                        var isInfinity = exp.TypeOf(eval.Peek()) == typeof(float) ? r4IsInfinity : r8IsInfinity;
                         var ethrow = exp.Throw(exp.New(arithError, new[] { exp.Constant("Value is not a finite number.") }));
                         var evalue = eval.Pop();
                         eval.Push(exp.If(exp.Call(isInfinity, false, default(T), new[] { evalue }), ethrow, evalue));
@@ -680,8 +723,10 @@ namespace CIL
                     case OpType.Unbox_any:
                         eval.Push(exp.Unbox(eval.Pop(), x.ResolveType()));
                         break;
-                    case OpType.Break:
-                        break;
+                    //case OpType.Break:
+                    //    break;
+                    //case OpType.Volatile_:
+                    //    break;
                     //case OpType.Refanytype:
                     //case OpType.Refanyval:
                     //case OpType.Mkrefany:
@@ -695,8 +740,8 @@ namespace CIL
 
         static T Cast<T>(T e, Type type, IExpression<T> exp)
         {
-            return exp.Typeof(e) == type ? e:
-                   exp.IsConstant(e)     ? exp.Constant(Convert.ChangeType(exp.ValueOf(e), type)):
+            return exp.TypeOf(e) == type ? e:
+                   exp.IsConstant(e)     ? exp.Constant(Convert.ChangeType(exp.Value(e), type)):
                                            exp.Cast(e, type);
         }
     }

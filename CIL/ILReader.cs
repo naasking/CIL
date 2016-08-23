@@ -17,6 +17,7 @@ namespace CIL
         Type[] typeContext;
         byte[] code;
         int i;
+        int bound;
 
         /// <summary>
         /// Construct an instance of a CIL reader.
@@ -32,6 +33,10 @@ namespace CIL
             var body = method.GetMethodBody();
             this.Locals = body?.LocalVariables ?? new List<LocalVariableInfo>(0);
             this.code = body?.GetILAsByteArray() ?? new byte[0];
+            this.bound = code.Length;
+            //method.GetMethodBody().ExceptionHandlingClauses[0].Flags == ExceptionHandlingClauseOptions
+            // enum ScopeType { Normal, Try, Catch, Finally }
+            //Dictionary<int, ScopeType> ??
         }
 
         /// <summary>
@@ -64,7 +69,18 @@ namespace CIL
         /// <param name="mark"></param>
         public void Seek(IL.Label mark)
         {
-            i = mark.pos;
+            this.i = mark.pos;
+        }
+
+        /// <summary>
+        /// Move the reader's position to the marked position.
+        /// </summary>
+        /// <param name="mark"></param>
+        public void Seek(IL.Label mark, IL.Label bound)
+        {
+            if (bound < mark) throw new ArgumentOutOfRangeException("bound", "The IL.Label's upper bound must be greater than or equal to the mark.");
+            this.i = mark.pos;
+            this.bound = bound.pos;
         }
 
         /// <summary>
