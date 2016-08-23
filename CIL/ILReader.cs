@@ -16,6 +16,7 @@ namespace CIL
         Type[] methodContext;
         Type[] typeContext;
         byte[] code;
+        ExceptionHandlingClauseOptions?[] scopes;
         int i;
         int bound;
 
@@ -90,6 +91,7 @@ namespace CIL
         public bool MoveNext()
         {
             if (i >= code.Length) return false;
+            var label = i;
             var op = IL.GetOpCode(code, ref i);
             var arg = default(Operand);
             switch (op.OperandType)
@@ -126,11 +128,11 @@ namespace CIL
                     i += 4;
                     break;
                 case OperandType.InlineBrTarget:
-                    arg = new Operand(new IL.Label { pos = i + BitConverter.ToInt32(code, i) });
+                    arg = new Operand(new IL.Label { pos = BitConverter.ToInt32(code, i) + i + 4 });
                     i += 4;
                     break;
                 case OperandType.ShortInlineBrTarget:
-                    arg = new Operand(new IL.Label { pos = i + (sbyte)code[i] });
+                    arg = new Operand(new IL.Label { pos = (int)code[i] + i + 1 });
                     i += 1;
                     break;
                 case OperandType.ShortInlineI:
@@ -139,7 +141,7 @@ namespace CIL
                     i += 1;
                     break;
             }
-            Current = new Instruction(this, op, arg);
+            Current = new Instruction(this, op, arg, (ushort)label);
             return true;
         }
 
