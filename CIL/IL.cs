@@ -57,6 +57,10 @@ namespace CIL
             {
                 return pos.CompareTo(other);
             }
+            public override string ToString()
+            {
+                return "IL_" + pos.ToString("0000");
+            }
             public static bool operator <(Label left, Label right)
             {
                 return left.pos < right.pos;

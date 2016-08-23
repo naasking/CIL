@@ -251,8 +251,8 @@ namespace CIL
                 case OperandType.InlineI8: return Operand.Int64;
                 case OperandType.InlineR: return Operand.Float64;
                 case OperandType.ShortInlineR: return Operand.Float32;
-                case OperandType.InlineI:
-                case OperandType.InlineBrTarget: return Operand.Int32;
+                case OperandType.InlineI: return Operand.Int32;
+                case OperandType.InlineBrTarget: return "IL_" + Operand.Int32.ToString("0000");
                 case OperandType.InlineSwitch: return Operand.MetadataToken;
                 case OperandType.InlineField: return ResolveField();
                 case OperandType.InlineMethod: return ResolveMethod();
@@ -261,7 +261,7 @@ namespace CIL
                 case OperandType.InlineTok: return ResolveMember();
                 case OperandType.InlineType: return ResolveType();
                 case OperandType.InlineVar: return Operand.Int16;
-                case OperandType.ShortInlineBrTarget: return Operand.Int8;
+                case OperandType.ShortInlineBrTarget: return "IL_" + Operand.Int8.ToString("0000");
                 case OperandType.ShortInlineI: return Operand.Int8;
                 case OperandType.ShortInlineVar: return Operand.Int8;
                 default: //throw new ArgumentException("Unknown operand type.");
