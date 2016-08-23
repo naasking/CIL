@@ -61,7 +61,7 @@ namespace CIL
         /// <summary>
         /// The operand value.
         /// </summary>
-        [FieldOffset(0)] public readonly ILReader.Label Label;
+        [FieldOffset(0)] public readonly IL.Label Label;
 
         /// <summary>
         /// The operand value.
@@ -73,7 +73,7 @@ namespace CIL
         /// Construct an operand from a value.
         /// </summary>
         /// <param name="x">The operand value.</param>
-        public Operand(ILReader.Label x)
+        public Operand(IL.Label x)
             : this()
         {
             this.Label = x;
@@ -418,7 +418,7 @@ namespace CIL
         /// Resolve the set of branches in a given switch statement.
         /// </summary>
         /// <returns></returns>
-        public IEnumerable<KeyValuePair<int, ILReader.Label>> ResolveBranches()
+        public IEnumerable<KeyValuePair<int, IL.Label>> ResolveBranches()
         {
             return reader.ResolveBranches(Operand.Int32);
         }

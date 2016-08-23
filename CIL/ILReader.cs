@@ -50,27 +50,19 @@ namespace CIL
         public IList<ParameterInfo> Args { get; private set; }
 
         /// <summary>
-        /// A position in the instruction stream.
-        /// </summary>
-        public struct Label
-        {
-            internal int pos;
-        }
-
-        /// <summary>
         /// Generate a label marking a position in the instruction stream.
         /// </summary>
         /// <returns></returns>
-        public Label Mark()
+        public IL.Label Mark()
         {
-            return new Label { pos = i };
+            return new IL.Label { pos = i };
         }
 
         /// <summary>
         /// Move the reader's position to the marked position.
         /// </summary>
         /// <param name="mark"></param>
-        public void Seek(Label mark)
+        public void Seek(IL.Label mark)
         {
             i = mark.pos;
         }
@@ -88,7 +80,7 @@ namespace CIL
             {
                 case OperandType.InlineSwitch:
                     var count = BitConverter.ToInt32(code, i);
-                    arg = new Operand(new Label { pos = i });
+                    arg = new Operand(new IL.Label { pos = i });
                     i += 4 + 4 * count; // skip 'count' and 32bit branch target list
                     break;
                 case OperandType.InlineI:
@@ -118,11 +110,11 @@ namespace CIL
                     i += 4;
                     break;
                 case OperandType.InlineBrTarget:
-                    arg = new Operand(new Label { pos = i + BitConverter.ToInt32(code, i) });
+                    arg = new Operand(new IL.Label { pos = i + BitConverter.ToInt32(code, i) });
                     i += 4;
                     break;
                 case OperandType.ShortInlineBrTarget:
-                    arg = new Operand(new Label { pos = i + (sbyte)code[i] });
+                    arg = new Operand(new IL.Label { pos = i + (sbyte)code[i] });
                     i += 1;
                     break;
                 case OperandType.ShortInlineI:
@@ -186,7 +178,7 @@ namespace CIL
             return module.ResolveSignature(token);
         }
 
-        internal IEnumerable<KeyValuePair<int, ILReader.Label>> ResolveBranches(int pos)
+        internal IEnumerable<KeyValuePair<int, IL.Label>> ResolveBranches(int pos)
         {
             var count = BitConverter.ToInt32(code, pos);
             pos += 4;
@@ -194,7 +186,7 @@ namespace CIL
             for (int i = 0; i < count; ++i)
             {
                 var offset = BitConverter.ToInt32(code, pos);
-                yield return new KeyValuePair<int, Label>(offset, new ILReader.Label { pos = basep + offset });
+                yield return new KeyValuePair<int, IL.Label>(offset, new IL.Label { pos = basep + offset });
                 pos += 4;
             }
         }

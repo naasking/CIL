@@ -36,6 +36,54 @@ namespace CIL
         }
 
         /// <summary>
+        /// A position in the instruction stream.
+        /// </summary>
+        public struct Label : IEquatable<Label>, IComparable<Label>
+        {
+            internal int pos;
+            public override bool Equals(object obj)
+            {
+                return obj is Label && Equals((Label)obj);
+            }
+            public override int GetHashCode()
+            {
+                return pos;
+            }
+            public bool Equals(Label other)
+            {
+                return this == other;
+            }
+            public int CompareTo(Label other)
+            {
+                return pos.CompareTo(other);
+            }
+            public static bool operator <(Label left, Label right)
+            {
+                return left.pos < right.pos;
+            }
+            public static bool operator >(Label left, Label right)
+            {
+                return left.pos > right.pos;
+            }
+            public static bool operator <=(Label left, Label right)
+            {
+                return left.pos <= right.pos;
+            }
+            public static bool operator >=(Label left, Label right)
+            {
+                return left.pos >= right.pos;
+            }
+            public static bool operator ==(Label left, Label right)
+            {
+                return left.pos == right.pos;
+            }
+            public static bool operator !=(Label left, Label right)
+            {
+                return left.pos != right.pos;
+            }
+        }
+
+        /// <summary>
         /// Get the OpCode of the corresponding byte.
         /// </summary>
         /// <param name="ops"></param>
