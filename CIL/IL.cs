@@ -137,6 +137,7 @@ namespace CIL
         /// <typeparam name="T">The type of decompiled expressions.</typeparam>
         /// <param name="code">The method to decompile.</param>
         /// <param name="decompiler">The CIL expression decompiler.</param>
+        /// <param name="args">The method arguments.</param>
         /// <returns>An expression representing the code.</returns>
         public static T Decompile<T>(this MethodBase code, IExpression<T> decompiler, out T[] args)
         {

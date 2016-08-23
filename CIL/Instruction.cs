@@ -214,19 +214,13 @@ namespace CIL
         /// The position of this instruction in the code.
         /// </summary>
         readonly ushort label;
-
-        /// <summary>
-        /// Construct an instruction.
-        /// </summary>
-        /// <param name="reader">The reader that created this instruction.</param>
-        /// <param name="op">The instruction opcode.</param>
-        /// <param name="arg">The instruction operand.</param>
-        public Instruction(ILReader reader, OpCode op, Operand arg, ushort label)
+        
+        Instruction(ILReader reader, OpCode op, Operand arg, ushort label)
         {
             this.reader = reader;
             this.OpCode = op;
             this.Operand = arg;
-            this.label = label;
+            this.label = (ushort)label;
         }
 
         /// <summary>
@@ -234,7 +228,20 @@ namespace CIL
         /// </summary>
         /// <param name="reader">The reader that created this instruction.</param>
         /// <param name="op">The instruction opcode.</param>
-        public Instruction(ILReader reader, OpCode op, ushort label)
+        /// <param name="arg">The instruction operand.</param>
+        /// <param name="label">The instruction's address in the bytecode.</param>
+        public Instruction(ILReader reader, OpCode op, Operand arg, IL.Label label)
+            : this(reader, op, arg, (ushort)label.pos)
+        {
+        }
+
+        /// <summary>
+        /// Construct an instruction.
+        /// </summary>
+        /// <param name="reader">The reader that created this instruction.</param>
+        /// <param name="op">The instruction opcode.</param>
+        /// <param name="label">The instruction's address in the bytecode.</param>
+        public Instruction(ILReader reader, OpCode op, IL.Label label)
             : this(reader, op, default(Operand), label)
         {
         }

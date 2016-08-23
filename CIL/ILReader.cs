@@ -73,16 +73,16 @@ namespace CIL
             this.i = mark.pos;
         }
 
-        /// <summary>
-        /// Move the reader's position to the marked position.
-        /// </summary>
-        /// <param name="mark"></param>
-        public void Seek(IL.Label mark, IL.Label bound)
-        {
-            if (bound < mark) throw new ArgumentOutOfRangeException("bound", "The IL.Label's upper bound must be greater than or equal to the mark.");
-            this.i = mark.pos;
-            this.bound = bound.pos;
-        }
+        ///// <summary>
+        ///// Move the reader's position to the marked position.
+        ///// </summary>
+        ///// <param name="mark"></param>
+        //public void Seek(IL.Label mark, IL.Label bound)
+        //{
+        //    if (bound < mark) throw new ArgumentOutOfRangeException("bound", "The IL.Label's upper bound must be greater than or equal to the mark.");
+        //    this.i = mark.pos;
+        //    this.bound = bound.pos;
+        //}
 
         /// <summary>
         /// Move to the next instruction.
@@ -141,7 +141,7 @@ namespace CIL
                     i += 1;
                     break;
             }
-            Current = new Instruction(this, op, arg, (ushort)label);
+            Current = new Instruction(this, op, arg, new IL.Label { pos = label });
             return true;
         }
 
