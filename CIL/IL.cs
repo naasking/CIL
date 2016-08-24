@@ -59,7 +59,7 @@ namespace CIL
             }
             public override string ToString()
             {
-                return "IL_" + pos.ToString("0000");
+                return "IL_" + pos.ToString("X4");
             }
             public static bool operator <(Label left, Label right)
             {

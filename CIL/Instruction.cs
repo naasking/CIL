@@ -21,7 +21,7 @@ namespace CIL
         /// <summary>
         /// The operand value.
         /// </summary>
-        [FieldOffset(4)] public readonly float Float32;
+        [FieldOffset(0)] public readonly float Float32;
         /// <summary>
         /// The operand value.
         /// </summary>
@@ -259,7 +259,7 @@ namespace CIL
                 case OperandType.InlineR: return Operand.Float64;
                 case OperandType.ShortInlineR: return Operand.Float32;
                 case OperandType.InlineI: return Operand.Int32;
-                case OperandType.InlineBrTarget: return "IL_" + Operand.Int32.ToString("0000");
+                case OperandType.InlineBrTarget: return Operand.Label.ToString();
                 case OperandType.InlineSwitch: return Operand.MetadataToken;
                 case OperandType.InlineField: return ResolveField();
                 case OperandType.InlineMethod: return ResolveMethod();
@@ -268,7 +268,7 @@ namespace CIL
                 case OperandType.InlineTok: return ResolveMember();
                 case OperandType.InlineType: return ResolveType();
                 case OperandType.InlineVar: return Operand.Int16;
-                case OperandType.ShortInlineBrTarget: return "IL_" + Operand.Int8.ToString("0000");
+                case OperandType.ShortInlineBrTarget: return Operand.Label.ToString();
                 case OperandType.ShortInlineI: return Operand.Int8;
                 case OperandType.ShortInlineVar: return Operand.Int8;
                 default: //throw new ArgumentException("Unknown operand type.");
@@ -298,25 +298,25 @@ namespace CIL
             //...
             switch (OpCode.Type())
             {
-                case OpType.Starg_s: return new Instruction(reader, OpCodes.Starg, Operand, label);
-                case OpType.Stloc_s: return new Instruction(reader, OpCodes.Stloc, Operand, label);
+                case OpType.Starg_s: return new Instruction(reader, OpCodes.Starg, new Operand((short)Operand.Int8), label);
+                case OpType.Stloc_s: return new Instruction(reader, OpCodes.Stloc, new Operand((short)Operand.Int8), label);
                 case OpType.Stloc_0: return new Instruction(reader, OpCodes.Stloc, 0, label);
                 case OpType.Stloc_1: return new Instruction(reader, OpCodes.Stloc, 1, label);
                 case OpType.Stloc_2: return new Instruction(reader, OpCodes.Stloc, 2, label);
                 case OpType.Stloc_3: return new Instruction(reader, OpCodes.Stloc, 3, label);
-                case OpType.Ldloca_s: return new Instruction(reader, OpCodes.Ldloca, Operand, label);
-                case OpType.Ldloc_s: return new Instruction(reader, OpCodes.Ldloc, Operand, label);
+                case OpType.Ldloca_s: return new Instruction(reader, OpCodes.Ldloca, new Operand((short)Operand.Int8), label);
+                case OpType.Ldloc_s: return new Instruction(reader, OpCodes.Ldloc, new Operand((short)Operand.Int8), label);
                 case OpType.Ldloc_0: return new Instruction(reader, OpCodes.Ldloc, 0, label);
                 case OpType.Ldloc_1: return new Instruction(reader, OpCodes.Ldloc, 1, label);
                 case OpType.Ldloc_2: return new Instruction(reader, OpCodes.Ldloc, 2, label);
                 case OpType.Ldloc_3: return new Instruction(reader, OpCodes.Ldloc, 3, label);
-                case OpType.Ldarga_s: return new Instruction(reader, OpCodes.Ldarga, Operand, label);
-                case OpType.Ldarg_s: return new Instruction(reader, OpCodes.Ldarg, Operand, label);
+                case OpType.Ldarga_s: return new Instruction(reader, OpCodes.Ldarga, new Operand((short)Operand.Int8), label);
+                case OpType.Ldarg_s: return new Instruction(reader, OpCodes.Ldarg, new Operand((short)Operand.Int8), label);
                 case OpType.Ldarg_0: return new Instruction(reader, OpCodes.Ldarg, 0, label);
                 case OpType.Ldarg_1: return new Instruction(reader, OpCodes.Ldarg, 1, label);
                 case OpType.Ldarg_2: return new Instruction(reader, OpCodes.Ldarg, 2, label);
                 case OpType.Ldarg_3: return new Instruction(reader, OpCodes.Ldarg, 3, label);
-                case OpType.Ldc_i4_s: return new Instruction(reader, OpCodes.Ldc_I4, Operand, label);
+                case OpType.Ldc_i4_s: return new Instruction(reader, OpCodes.Ldc_I4, new Operand((short)Operand.Int8), label);
                 case OpType.Ldc_i4_m1: return new Instruction(reader, OpCodes.Ldc_I4, -1, label);
                 case OpType.Ldc_i4_0: return new Instruction(reader, OpCodes.Ldc_I4, 0, label);
                 case OpType.Ldc_i4_1: return new Instruction(reader, OpCodes.Ldc_I4, 1, label);
@@ -441,7 +441,7 @@ namespace CIL
         /// <returns>A string representation of the instruction.</returns>
         public override string ToString()
         {
-            return "IL_" + label.ToString("0000") + ": " + OpCode.Name + " " + Resolve();
+            return "IL_" + label.ToString("X4") + ": " + OpCode.Name + " " + Resolve();
         }
     }
 }

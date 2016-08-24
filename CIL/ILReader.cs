@@ -132,7 +132,7 @@ namespace CIL
                     i += 4;
                     break;
                 case OperandType.ShortInlineBrTarget:
-                    arg = new Operand(new IL.Label { pos = (int)code[i] + i + 1 });
+                    arg = new Operand(new IL.Label { pos = (sbyte)code[i] + i + 1 });
                     i += 1;
                     break;
                 case OperandType.ShortInlineI:
