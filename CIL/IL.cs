@@ -55,7 +55,7 @@ namespace CIL
             }
             public int CompareTo(Label other)
             {
-                return pos.CompareTo(other);
+                return pos.CompareTo(other.pos);
             }
             public override string ToString()
             {
