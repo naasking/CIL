@@ -334,6 +334,8 @@ namespace CIL
                 case OpType.Beq_s:    return new Instruction(reader, OpCodes.Beq, Operand, label);
                 case OpType.Bge_s:    return new Instruction(reader, OpCodes.Bge, Operand, label);
                 case OpType.Bge_un_s: return new Instruction(reader, OpCodes.Bgt_Un, Operand, label);
+                case OpType.Bgt_s:    return new Instruction(reader, OpCodes.Bgt, Operand, label);
+                case OpType.Bgt_un_s: return new Instruction(reader, OpCodes.Bgt_Un, Operand, label);
                 case OpType.Ble_s:    return new Instruction(reader, OpCodes.Ble, Operand, label);
                 case OpType.Ble_un_s: return new Instruction(reader, OpCodes.Ble_Un, Operand, label);
                 case OpType.Blt_s:    return new Instruction(reader, OpCodes.Blt, Operand, label);
