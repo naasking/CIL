@@ -37,6 +37,9 @@ namespace CIL
         T If(T cond, T _then, T _else);
         T If(T cond, T _then);
         // 'obj' can be null for static methods
+        T Property(T obj, PropertyInfo getter);
+        T Property(T obj, PropertyInfo getter, IEnumerable<T> indexers);
+        //T Set(T obj, MethodBase setter, T value);
         T Call(MethodBase method, bool tailcall, T obj, IEnumerable<T> args);
         T CallIndirect(byte[] signature, T methodPtr, bool tailcall, IEnumerable<T> args);
         T GetPointer(MethodBase method, T obj);

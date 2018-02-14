@@ -118,6 +118,34 @@ namespace CIL.Tests
             }
         }
 
+        class Foo
+        {
+            public string Bar { get; set; }
+            public string this[int i]
+            {
+                get { return null; }
+                set { }
+            }
+        }
+
+        [Fact]
+        public static void TestProperties()
+        {
+            Func<Foo, string> getFoo = x => x.Bar;
+            Expression<Func<Foo, string>> getFooE = x => x.Bar;
+            var e = LinqDecompiler.Decompile(getFoo);
+            Assert.Equal(getFooE.ToString(), e.ToString());
+        }
+
+        [Fact]
+        public static void TestPropertyIndexers()
+        {
+            Func<Foo, string> getFoo = x => x[2];
+            Expression<Func<Foo, string>> getFooE = x => x[2];
+            var e = LinqDecompiler.Decompile(getFoo);
+            Assert.Equal(getFooE.ToString(), e.ToString());
+        }
+
         public static void Main(string[] args)
         {
             TestSimple();
@@ -127,6 +155,8 @@ namespace CIL.Tests
             TestStringOps();
             TestCalls();
             TestOtherCalls();
+            TestProperties();
+            TestPropertyIndexers();
             //TestBoolOps();
             //TestSwitch();
         }
