@@ -95,7 +95,7 @@ namespace CIL.Tests
                 switch (il.Current.OpCode.Type())
                 {
                     case OpType.Call:
-                        Assert.True(methods.Contains(il.Current.ResolveMethod()));
+                        Assert.Contains(il.Current.ResolveMethod(), methods);
                         break;
                 }
             }
