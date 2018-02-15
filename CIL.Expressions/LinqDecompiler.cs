@@ -48,7 +48,7 @@ namespace CIL.Expressions
         }
         public override Expression Assign(Expression variable, Expression value)
         {
-            return Expression.Assign(variable, value);
+            return Expression.Assign(variable, value.Type == variable.Type ? value : Cast(value, variable.Type));
         }
         public override Expression Box(Expression exp)
         {

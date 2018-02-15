@@ -87,7 +87,7 @@ namespace CIL.Tests
         [Fact]
         public static void TestCalls()
         {
-            var main = new Action<string[]>(Main);
+            var main = new Action<string[]>(MainOrig);
             var methods = typeof(CILTests).GetMethods().Where(x => x != main.Method).ToArray();
             var il = main.Method.GetILReader();
             while (il.MoveNext())
@@ -146,7 +146,7 @@ namespace CIL.Tests
             Assert.Equal(getFooE.ToString(), e.ToString());
         }
 
-        public static void Main(string[] args)
+        public static void MainOrig(string[] args)
         {
             TestSimple();
             TestEqConst();
