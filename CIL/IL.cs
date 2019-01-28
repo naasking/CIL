@@ -320,7 +320,10 @@ namespace CIL
                                 il.Seek(kv.Value);
                                 var tmp = new Stack<T>(eval);
                                 Process(il, exp, tmp, env, args, locals);
-                                caseValue = tmp.Pop();
+                                var block = new Stack<T>();
+                                while (!eval.Contains(tmp.Peek()))
+                                    block.Push(tmp.Pop());
+                                caseValue = block.Count > 1 ? exp.Block(block) : block.Peek();
                             }
                             return new KeyValuePair<object, T>(kv.Key, caseValue);
                         });
