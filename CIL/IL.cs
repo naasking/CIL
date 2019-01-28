@@ -300,7 +300,7 @@ namespace CIL
                             var tmp = new Stack<T>(eval);
                             Process(il, exp, tmp, env, args, locals);
                             // pop until tmp element matches an element in eval, then create block expression
-                            var block = new Stack<T>(eval);
+                            var block = new Stack<T>();
                             while (!eval.Contains(tmp.Peek()))
                                 block.Push(tmp.Pop());
                             // extract _then expression
