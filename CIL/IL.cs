@@ -278,9 +278,9 @@ namespace CIL
                         // recursively process if-then-else, but only if the targets haven't
                         // already been visited
                         var cond = eval.Pop();
+                        var elseStart = il.Mark();                  // save current position
                         if (!il.MoveNext())
                             throw new InvalidOperationException("Expected an instruction after branch!");
-                        var elseStart = il.Mark();                  // save current position
                         var thenStart = x.Operand.Label;
                         if (!env.TryGetValue(thenStart, out var _then))
                         {
