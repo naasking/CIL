@@ -146,9 +146,9 @@ namespace CIL
             var _this = code.IsStatic ? Enumerable.Empty<T>() : new[] { decompiler.Param("this", code.DeclaringType) };
             args = _this.Concat(code.GetParameters().Select(decompiler.Param)).ToArray();
             Process(il, decompiler, eval, new Dictionary<Label, T>(), args, il.Locals.Select(decompiler.Local).ToArray());
-            return eval.Pop();
+            return eval.Count > 1 ? decompiler.Block(eval.Reverse()) : eval.Pop();
         }
-
+        
         static void Process<T>(ILReader il, IExpression<T> exp, Stack<T> eval, Dictionary<Label, T> env, T[] args, T[] locals)
         {
             // the simplest way to add branch sharing, but less efficient
@@ -285,16 +285,26 @@ namespace CIL
                         if (!env.TryGetValue(thenStart, out var _then))
                         {
                             il.Seek(thenStart);                    // seek to _then when branch condition true
-                            var tmp = new Stack<T>();
+                            var tmp = new Stack<T>(eval);
                             Process(il, exp, tmp, env, args, locals);
-                            _then = env[thenStart] = tmp.Pop();   // extract _then expression
+                            // pop until tmp element matches an element in eval, then create block expression
+                            var block = new Stack<T>();
+                            while (!eval.Contains(tmp.Peek()))
+                                block.Push(tmp.Pop());
+                            // extract _then expression
+                            _then = env[thenStart] = block.Count > 1 ? exp.Block(block) : block.Peek();
                         }
                         if (!env.TryGetValue(elseStart, out var _else))
                         {
                             il.Seek(elseStart);                    // seek to _else when branch condition false
-                            var tmp = new Stack<T>();
+                            var tmp = new Stack<T>(eval);
                             Process(il, exp, tmp, env, args, locals);
-                            _else = env[thenStart] = tmp.Pop();   // extract _else expression
+                            // pop until tmp element matches an element in eval, then create block expression
+                            var block = new Stack<T>(eval);
+                            while (!eval.Contains(tmp.Peek()))
+                                block.Push(tmp.Pop());
+                            // extract _then expression
+                            _else = env[thenStart] = block.Count > 1 ? exp.Block(block) : block.Peek();   // extract _else expression
                         }
                         eval.Push(exp.If(cond, _then, _else));
                         break;
@@ -579,12 +589,12 @@ namespace CIL
                         break;
                     case OpType.Ret:
                         //Debug.Assert(eval.Count == 1);
-                        if (eval.Count > 1)
-                        {
-                            var block = eval.Reverse().ToList();
-                            eval.Clear();
-                            eval.Push(exp.Block(block));
-                        }
+                        //if (eval.Count > 1)
+                        //{
+                        //    var block = eval.Reverse().ToList();
+                        //    eval.Clear();
+                        //    eval.Push(exp.Block(block));
+                        //}
                         eval.Push(exp.Return(eval.Pop()));
                         //break;
                         return;
