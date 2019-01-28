@@ -48,7 +48,9 @@ namespace CIL.Expressions
         }
         public override Expression Assign(Expression variable, Expression value)
         {
-            return Expression.Assign(variable, value);
+            return variable.Type != value.Type
+                ? Expression.Assign(variable, Expression.Convert(value, variable.Type))
+                : Expression.Assign(variable, value);
         }
         public override Expression Box(Expression exp)
         {
@@ -72,6 +74,10 @@ namespace CIL.Expressions
         public override Expression Constant<TValue>(TValue value)
         {
             return Expression.Constant(value);
+        }
+        public override Expression Constant(object value, Type type)
+        {
+            return Expression.Constant(value, type);
         }
         public override Expression Divide(Expression left, Expression right)
         {
@@ -109,7 +115,7 @@ namespace CIL.Expressions
         }
         public override Expression If(Expression cond, Expression _then, Expression _else)
         {
-            return Expression.IfThenElse(cond, _then, _else);
+            return Expression.Condition(cond, _then, _else);
         }
         public override Expression If(Expression cond, Expression _then)
         {
@@ -154,8 +160,10 @@ namespace CIL.Expressions
         public override Expression Not(Expression exp)
         {
             return exp.NodeType == ExpressionType.Equal
-                 ? NotEqual((exp as BinaryExpression).Left, (exp as BinaryExpression).Right)
-                 : Expression.Not(exp);
+                                ? NotEqual((exp as BinaryExpression).Left, (exp as BinaryExpression).Right):
+                   exp.Type != typeof(Boolean)
+                                ? Expression.Not(Expression.Convert(exp, typeof(Boolean))):
+                                  Expression.Not(exp);
         }
         public override Expression NotEqual(Expression lhs, Expression rhs)
         {
@@ -182,6 +190,10 @@ namespace CIL.Expressions
             //FIXME: not sure what to do with labelled expressions
             //return Expression.Return(exp);
             return exp;
+        }
+        public override Expression Block(IEnumerable<Expression> exp)
+        {
+            return Expression.Block(exp);
         }
         public override Expression RightShift(Expression value, Expression shift)
         {

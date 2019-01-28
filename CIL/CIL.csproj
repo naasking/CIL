@@ -43,6 +43,7 @@
     <Compile Include="IL.cs" />
     <Compile Include="ILReader.cs" />
     <Compile Include="Instruction.cs" />
+    <Compile Include="Lifo.cs" />
     <Compile Include="OpType.cs">
       <SubType>Code</SubType>
     </Compile>

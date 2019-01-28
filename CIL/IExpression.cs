@@ -20,6 +20,7 @@ namespace CIL
         T Local(LocalVariableInfo x);
         //T Bool(T e);
         T Constant<TValue>(TValue value); // or should elaborate?
+        T Constant(object value, Type type); // or should elaborate?
         T And(T left, T right);
         T Or(T left, T right);
         T Xor(T left, T right);
@@ -75,6 +76,7 @@ namespace CIL
         T ObjectInit(T address, Type objType);
         T BlockInit(T address, T value, T count);
         T BlockCopy(T dst, T src, T byteCount);
+        T Block(IEnumerable<T> e);
         T StructCopy(T dst, T src, Type structType);
         T EndFilter(T value);
         T SizeOf(Type valueType);

@@ -145,17 +145,25 @@ namespace CIL
             var eval = new Stack<T>();
             var _this = code.IsStatic ? Enumerable.Empty<T>() : new[] { decompiler.Param("this", code.DeclaringType) };
             args = _this.Concat(code.GetParameters().Select(decompiler.Param)).ToArray();
-            Process(il, decompiler, eval, args, il.Locals.Select(decompiler.Local).ToArray());
+            Process(il, decompiler, eval, new Dictionary<Label, T>(), args, il.Locals.Select(decompiler.Local).ToArray());
             return eval.Pop();
         }
 
-        static void Process<T>(ILReader il, IExpression<T> exp, Stack<T> eval, T[] args, T[] locals)
+        static void Process<T>(ILReader il, IExpression<T> exp, Stack<T> eval, Dictionary<Label, T> env, T[] args, T[] locals)
         {
+            // the simplest way to add branch sharing, but less efficient
+            //if (env.TryGetValue(il.Mark(), out var value))
+            //{
+            //    eval.Push(value);
+            //    return;
+            //}
             var tailcall = false;
             while (il.MoveNext())
             {
                 var x = il.Current;//.Simplify();
                 T rhs;
+                Type type;
+                //int index;
                 switch (x.OpCode.Type())
                 {
                     //--------------- arithmetic instructions --------------
@@ -229,7 +237,7 @@ namespace CIL
                     case OpType.Br:
                     case OpType.Br_s:
                         il.Seek(x.Operand.Label); // seek to branch label
-                        eval.Push(exp.Goto(eval.Pop()));
+                        //eval.Push(exp.Goto(eval.Pop()));
                         break;
                     case OpType.Beq:
                     case OpType.Beq_s:
@@ -261,24 +269,33 @@ namespace CIL
                         goto case OpType.Brtrue;
                     case OpType.Brfalse:
                     case OpType.Brfalse_s:
-                        eval.Push(exp.Negate(eval.Pop()));
+                        rhs = eval.Pop();
+                        type = exp.TypeOf(rhs);
+                        eval.Push(exp.Equal(rhs, NullOrZero(exp, type)));
                         goto case OpType.Brtrue;
                     case OpType.Brtrue:
                     case OpType.Brtrue_s:
-                        //FIXME: this duplicates expressions for every branch instead of unifying them. Need
-                        //to track a Dictionary<Label, T>, and should skip Process() calls if the Label
-                        //already exists (and patch it in with a goto).
+                        // recursively process if-then-else, but only if the targets haven't
+                        // already been visited
                         var cond = eval.Pop();
                         if (!il.MoveNext())
                             throw new InvalidOperationException("Expected an instruction after branch!");
-                        var elseStart = il.Mark();// save current position
+                        var elseStart = il.Mark();                  // save current position
                         var thenStart = x.Operand.Label;
-                        il.Seek(thenStart);       // seek to _then when branch condition true
-                        Process(il, exp, eval, args, locals);
-                        var _then = eval.Pop();   // extract _then expression
-                        il.Seek(elseStart);       // seek to _else when branch condition false
-                        Process(il, exp, eval, args, locals);
-                        var _else = eval.Pop();   // extract _else expression
+                        if (!env.TryGetValue(thenStart, out var _then))
+                        {
+                            il.Seek(thenStart);                    // seek to _then when branch condition true
+                            var tmp = new Stack<T>();
+                            Process(il, exp, tmp, env, args, locals);
+                            _then = env[thenStart] = tmp.Pop();   // extract _then expression
+                        }
+                        if (!env.TryGetValue(elseStart, out var _else))
+                        {
+                            il.Seek(elseStart);                    // seek to _else when branch condition false
+                            var tmp = new Stack<T>();
+                            Process(il, exp, tmp, env, args, locals);
+                            _else = env[thenStart] = tmp.Pop();   // extract _else expression
+                        }
                         eval.Push(exp.If(cond, _then, _else));
                         break;
                     case OpType.Switch:
@@ -288,9 +305,14 @@ namespace CIL
                         var swt = il.Mark();
                         var cases = x.ResolveBranches().Select(kv =>
                         {
-                            il.Seek(kv.Value);
-                            Process(il, exp, eval, args, locals);
-                            return new KeyValuePair<object, T>(kv.Key, eval.Pop());
+                            if (!env.TryGetValue(kv.Value, out var caseValue))
+                            {
+                                il.Seek(kv.Value);
+                                var tmp = new Stack<T>(eval);
+                                Process(il, exp, tmp, env, args, locals);
+                                caseValue = tmp.Pop();
+                            }
+                            return new KeyValuePair<object, T>(kv.Key, caseValue);
                         });
                         eval.Push(exp.Switch(val, cases));
                         il.Seek(swt);
@@ -492,20 +514,40 @@ namespace CIL
                         eval.Push(locals[x.Operand.Int32]);
                         break;
                     case OpType.Stloc_0:
-                        eval.Push(exp.Assign(locals[0], eval.Pop()));
+                        rhs = eval.Pop();
+                        type = exp.TypeOf(rhs);
+                        if (exp.TypeOf(locals[0]) == typeof(Boolean) && type != typeof(Boolean))
+                            rhs = exp.NotEqual(rhs, NullOrZero(exp, type));
+                        eval.Push(exp.Assign(locals[0], rhs));
                         break;
                     case OpType.Stloc_1:
-                        eval.Push(exp.Assign(locals[1], eval.Pop()));
+                        rhs = eval.Pop();
+                        type = exp.TypeOf(rhs);
+                        if (exp.TypeOf(locals[1]) == typeof(Boolean) && type != typeof(Boolean))
+                            rhs = exp.NotEqual(rhs, NullOrZero(exp, type));
+                        eval.Push(exp.Assign(locals[1], rhs));
                         break;
                     case OpType.Stloc_2:
-                        eval.Push(exp.Assign(locals[2], eval.Pop()));
+                        rhs = eval.Pop();
+                        type = exp.TypeOf(rhs);
+                        if (exp.TypeOf(locals[2]) == typeof(Boolean) && type != typeof(Boolean))
+                            rhs = exp.NotEqual(rhs, NullOrZero(exp, type));
+                        eval.Push(exp.Assign(locals[2], rhs));
                         break;
                     case OpType.Stloc_3:
-                        eval.Push(exp.Assign(locals[3], eval.Pop()));
+                        rhs = eval.Pop();
+                        type = exp.TypeOf(rhs);
+                        if (exp.TypeOf(locals[3]) == typeof(Boolean) && type != typeof(Boolean))
+                            rhs = exp.NotEqual(rhs, NullOrZero(exp, type));
+                        eval.Push(exp.Assign(locals[3], rhs));
                         break;
                     case OpType.Stloc:
                     case OpType.Stloc_s:
-                        eval.Push(exp.Assign(locals[x.Operand.Int16], eval.Pop()));
+                        rhs = eval.Pop();
+                        type = exp.TypeOf(rhs);
+                        if (exp.TypeOf(locals[x.Operand.Int16]) == typeof(Boolean) && type != typeof(Boolean))
+                            rhs = exp.NotEqual(rhs, NullOrZero(exp, type));
+                        eval.Push(exp.Assign(locals[x.Operand.Int16], rhs));
                         break;
                     case OpType.Starg:
                     case OpType.Starg_s:
@@ -536,9 +578,16 @@ namespace CIL
                         eval.Pop();
                         break;
                     case OpType.Ret:
-                        Debug.Assert(eval.Count == 1);
+                        //Debug.Assert(eval.Count == 1);
+                        if (eval.Count > 1)
+                        {
+                            var block = eval.Reverse().ToList();
+                            eval.Clear();
+                            eval.Push(exp.Block(block));
+                        }
                         eval.Push(exp.Return(eval.Pop()));
-                        break;
+                        //break;
+                        return;
                     case OpType.Ldelem:
                     case OpType.Ldelem_ref:
                     case OpType.Ldelem_i:
@@ -741,6 +790,13 @@ namespace CIL
                         throw new NotSupportedException("Instruction not supported: " + x);
                 }
             }
+        }
+
+        static T NullOrZero<T>(IExpression<T> exp, Type type)
+        {
+            return type == typeof(int) || type == typeof(long)
+                 ? exp.Constant(0)
+                 : exp.Constant(null, type);
         }
 
         static T Cast<T>(T e, Type type, IExpression<T> exp)

@@ -13,6 +13,7 @@ namespace CIL
         public virtual T Local(LocalVariableInfo x) { throw new NotSupportedException(); }
         //T Bool(T e) { throw new NotSupportedException(); }
         public virtual T Constant<TValue>(TValue value) { throw new NotSupportedException(); } // or should elaborate?
+        public virtual T Constant(object value, Type type) { throw new NotSupportedException(); } // or should elaborate?
         public virtual T And(T left, T right) { throw new NotSupportedException(); }
         public virtual T Or(T left, T right) { throw new NotSupportedException(); }
         public virtual T Xor(T left, T right) { throw new NotSupportedException(); }
@@ -68,6 +69,7 @@ namespace CIL
         public virtual T ObjectInit(T address, Type objType) { throw new NotSupportedException(); }
         public virtual T BlockInit(T address, T value, T count) { throw new NotSupportedException(); }
         public virtual T BlockCopy(T dst, T src, T byteCount) { throw new NotSupportedException(); }
+        public virtual T Block(IEnumerable<T> exp) { throw new NotSupportedException(); }
         public virtual T StructCopy(T dst, T src, Type structType) { throw new NotSupportedException(); }
         public virtual T EndFilter(T value) { throw new NotSupportedException(); }
         public virtual T SizeOf(Type valueType) { throw new NotSupportedException(); }
