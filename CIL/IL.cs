@@ -282,6 +282,18 @@ namespace CIL
                         if (!il.MoveNext())
                             throw new InvalidOperationException("Expected an instruction after branch!");
                         var thenStart = x.Operand.Label;
+                        if (!env.TryGetValue(elseStart, out var _else))
+                        {
+                            //il.Seek(elseStart);                    // seek to _else when branch condition false
+                            var tmp = new Stack<T>(eval);
+                            Process(il, exp, tmp, env, args, locals);
+                            // pop until tmp element matches an element in eval, then create block expression
+                            var block = new Stack<T>();
+                            while (!eval.Contains(tmp.Peek()))
+                                block.Push(tmp.Pop());
+                            // extract _then expression
+                            _else = env[thenStart] = block.Count > 1 ? exp.Block(block) : block.Peek();   // extract _else expression
+                        }
                         if (!env.TryGetValue(thenStart, out var _then))
                         {
                             il.Seek(thenStart);                    // seek to _then when branch condition true
@@ -293,18 +305,6 @@ namespace CIL
                                 block.Push(tmp.Pop());
                             // extract _then expression
                             _then = env[thenStart] = block.Count > 1 ? exp.Block(block) : block.Peek();
-                        }
-                        if (!env.TryGetValue(elseStart, out var _else))
-                        {
-                            il.Seek(elseStart);                    // seek to _else when branch condition false
-                            var tmp = new Stack<T>(eval);
-                            Process(il, exp, tmp, env, args, locals);
-                            // pop until tmp element matches an element in eval, then create block expression
-                            var block = new Stack<T>();
-                            while (!eval.Contains(tmp.Peek()))
-                                block.Push(tmp.Pop());
-                            // extract _then expression
-                            _else = env[thenStart] = block.Count > 1 ? exp.Block(block) : block.Peek();   // extract _else expression
                         }
                         eval.Push(exp.If(cond, _then, _else));
                         break;
@@ -323,7 +323,7 @@ namespace CIL
                                 var block = new Stack<T>();
                                 while (!eval.Contains(tmp.Peek()))
                                     block.Push(tmp.Pop());
-                                caseValue = block.Count > 1 ? exp.Block(block) : block.Peek();
+                                caseValue = tmp.Pop();
                             }
                             return new KeyValuePair<object, T>(kv.Key, caseValue);
                         });
