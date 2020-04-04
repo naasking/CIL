@@ -42,6 +42,10 @@ namespace CIL
         public struct Label : IEquatable<Label>, IComparable<Label>
         {
             internal int pos;
+            public Label(int pos)
+            {
+                this.pos = pos;
+            }
             public override bool Equals(object obj)
             {
                 return obj is Label && Equals((Label)obj);
@@ -171,15 +175,29 @@ namespace CIL
                     case OpType.Br:
                     case OpType.Br_s:
                         var target = il.Current.Operand.Label;
-                        if (target < il.Current.label)
+                        if (target < il.Current.Label)
                         {
-                            var i = bc.FindIndex(x => x.label == target);
-                            bc[i] = bc[i].AddLoop(il.Current.label);
+                            //Because instructions may take more than 1 byte, label.pos in IL is always >=
+                            //than corresponding index of instruction in bc, so we can't use target.pos to 
+                            //find the instruction being jumped to, so we search for it. Might be a good way
+                            //to guess a closer starting index for the search.
+                            //FIXME: not clear whether this heuristic for a closer starting index will
+                            //hold in all cases.
+                            var i = FindInstr(bc, (int)Math.Floor(target.pos * (double)bc.Count / il.Current.Label.pos), target);
+                            //var i = FindInstr(bc, 0, target);
+                            bc[i] = bc[i].AddLoop(il.Current.Label);
                         }
                         break;
                 }
             }
             return bc;
+        }
+
+        static int FindInstr(List<Instruction> il, int i, IL.Label label)
+        {
+            while (il[i].Label != label)
+                ++i;
+            return i;
         }
 
         static void Process<T>(ILReader il, IExpression<T> exp, Stack<T> eval, Dictionary<Label, T> env, T[] args, T[] locals)

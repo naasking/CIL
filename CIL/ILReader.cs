@@ -61,7 +61,7 @@ namespace CIL
         /// <returns></returns>
         public IL.Label Mark()
         {
-            return new IL.Label { pos = i };
+            return new IL.Label(i);
         }
 
         /// <summary>
@@ -99,7 +99,7 @@ namespace CIL
             {
                 case OperandType.InlineSwitch:
                     var count = BitConverter.ToInt32(code, i);
-                    arg = new Operand(new IL.Label { pos = i });
+                    arg = new Operand(new IL.Label(i));
                     i += 4 + 4 * count; // skip 'count' and 32bit branch target list
                     break;
                 case OperandType.InlineI:
@@ -129,11 +129,11 @@ namespace CIL
                     i += 4;
                     break;
                 case OperandType.InlineBrTarget:
-                    arg = new Operand(new IL.Label { pos = BitConverter.ToInt32(code, i) + i + 4 });
+                    arg = new Operand(new IL.Label(BitConverter.ToInt32(code, i) + i + 4));
                     i += 4;
                     break;
                 case OperandType.ShortInlineBrTarget:
-                    arg = new Operand(new IL.Label { pos = (sbyte)code[i] + i + 1 });
+                    arg = new Operand(new IL.Label((sbyte)code[i] + i + 1));
                     i += 1;
                     break;
                 case OperandType.ShortInlineI:
@@ -142,7 +142,7 @@ namespace CIL
                     i += 1;
                     break;
             }
-            Current = new Instruction(this, op, arg, new IL.Label { pos = label });
+            Current = new Instruction(this, op, arg, new IL.Label(label));
             return true;
         }
 
@@ -205,7 +205,7 @@ namespace CIL
             for (int i = 0; i < count; ++i)
             {
                 var offset = BitConverter.ToInt32(code, pos);
-                yield return new KeyValuePair<int, IL.Label>(offset, new IL.Label { pos = basep + offset });
+                yield return new KeyValuePair<int, IL.Label>(offset, new IL.Label(basep + offset));
                 pos += 4;
             }
         }

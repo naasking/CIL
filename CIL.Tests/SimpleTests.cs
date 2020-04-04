@@ -167,7 +167,10 @@ namespace CIL.Tests
             while (i > 0)
             {
                 if (i % 2 == 0)
+                {
                     i -= 3;
+                    continue;
+                }
                 if (i > 100)
                     break;
                 --i;
@@ -179,6 +182,10 @@ namespace CIL.Tests
         static void TestLoop()
         {
             var il = new Func<int, int>(LoopMethod).Method.GetInstructions();
+            Assert.Single(il.ElementAt(2).Loops);
+            var source = il.ElementAt(2).Loops.First();
+            Assert.Equal(source, il.Last(x => x.Label == source).Label);
+            //var e = new Func<int, int>(LoopMethod).Method.Decompile(new LinqDecompiler(), out var args);
         }
     }
 }

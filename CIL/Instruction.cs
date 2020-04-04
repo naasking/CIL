@@ -213,7 +213,7 @@ namespace CIL
         /// <summary>
         /// The position of this instruction in the code.
         /// </summary>
-        internal readonly IL.Label label;
+        public readonly IL.Label Label;
 
         internal Lifo<IL.Label> loops;
         
@@ -229,7 +229,7 @@ namespace CIL
             this.reader = reader;
             this.OpCode = op;
             this.Operand = arg;
-            this.label = label;
+            this.Label = label;
             this.loops = Lifo<IL.Label>.Empty;
         }
 
@@ -244,8 +244,18 @@ namespace CIL
         {
         }
 
+        /// <summary>
+        /// Tag the instruction with a loop.
+        /// </summary>
+        /// <param name="exit">The label that jumps to this point.</param>
+        /// <returns>A new instruction with the loop added.</returns>
         public Instruction AddLoop(IL.Label exit) =>
-            new Instruction(reader, OpCode, Operand, label) { loops = loops.Push(exit) };
+            new Instruction(reader, OpCode, Operand, Label) { loops = loops.Push(exit) };
+
+        /// <summary>
+        /// The series of labels that jump to this instruction.
+        /// </summary>
+        public IEnumerable<IL.Label> Loops => loops;
         
         /// <summary>
         /// Resolve the instruction's operand value.
@@ -299,49 +309,49 @@ namespace CIL
             //...
             switch (OpCode.Type())
             {
-                case OpType.Starg_s: return new Instruction(reader, OpCodes.Starg, new Operand((short)Operand.Int8), label);
-                case OpType.Stloc_s: return new Instruction(reader, OpCodes.Stloc, new Operand((short)Operand.Int8), label);
-                case OpType.Stloc_0: return new Instruction(reader, OpCodes.Stloc, 0, label);
-                case OpType.Stloc_1: return new Instruction(reader, OpCodes.Stloc, 1, label);
-                case OpType.Stloc_2: return new Instruction(reader, OpCodes.Stloc, 2, label);
-                case OpType.Stloc_3: return new Instruction(reader, OpCodes.Stloc, 3, label);
-                case OpType.Ldloca_s: return new Instruction(reader, OpCodes.Ldloca, new Operand((short)Operand.Int8), label);
-                case OpType.Ldloc_s: return new Instruction(reader, OpCodes.Ldloc, new Operand((short)Operand.Int8), label);
-                case OpType.Ldloc_0: return new Instruction(reader, OpCodes.Ldloc, 0, label);
-                case OpType.Ldloc_1: return new Instruction(reader, OpCodes.Ldloc, 1, label);
-                case OpType.Ldloc_2: return new Instruction(reader, OpCodes.Ldloc, 2, label);
-                case OpType.Ldloc_3: return new Instruction(reader, OpCodes.Ldloc, 3, label);
-                case OpType.Ldarga_s: return new Instruction(reader, OpCodes.Ldarga, new Operand((short)Operand.Int8), label);
-                case OpType.Ldarg_s: return new Instruction(reader, OpCodes.Ldarg, new Operand((short)Operand.Int8), label);
-                case OpType.Ldarg_0: return new Instruction(reader, OpCodes.Ldarg, 0, label);
-                case OpType.Ldarg_1: return new Instruction(reader, OpCodes.Ldarg, 1, label);
-                case OpType.Ldarg_2: return new Instruction(reader, OpCodes.Ldarg, 2, label);
-                case OpType.Ldarg_3: return new Instruction(reader, OpCodes.Ldarg, 3, label);
-                case OpType.Ldc_i4_s: return new Instruction(reader, OpCodes.Ldc_I4, new Operand((short)Operand.Int8), label);
-                case OpType.Ldc_i4_m1: return new Instruction(reader, OpCodes.Ldc_I4, -1, label);
-                case OpType.Ldc_i4_0: return new Instruction(reader, OpCodes.Ldc_I4, 0, label);
-                case OpType.Ldc_i4_1: return new Instruction(reader, OpCodes.Ldc_I4, 1, label);
-                case OpType.Ldc_i4_2: return new Instruction(reader, OpCodes.Ldc_I4, 2, label);
-                case OpType.Ldc_i4_3: return new Instruction(reader, OpCodes.Ldc_I4, 3, label);
-                case OpType.Ldc_i4_4: return new Instruction(reader, OpCodes.Ldc_I4, 4, label);
-                case OpType.Ldc_i4_5: return new Instruction(reader, OpCodes.Ldc_I4, 5, label);
-                case OpType.Ldc_i4_6: return new Instruction(reader, OpCodes.Ldc_I4, 6, label);
-                case OpType.Ldc_i4_7: return new Instruction(reader, OpCodes.Ldc_I4, 7, label);
-                case OpType.Ldc_i4_8: return new Instruction(reader, OpCodes.Ldc_I4, 8, label);
-                case OpType.Leave_s:  return new Instruction(reader, OpCodes.Leave, Operand, label);
-                case OpType.Brfalse_s:return new Instruction(reader, OpCodes.Brfalse, Operand, label);
-                case OpType.Brtrue_s: return new Instruction(reader, OpCodes.Brtrue, Operand, label);
-                case OpType.Br_s:     return new Instruction(reader, OpCodes.Br, Operand, label);
-                case OpType.Beq_s:    return new Instruction(reader, OpCodes.Beq, Operand, label);
-                case OpType.Bge_s:    return new Instruction(reader, OpCodes.Bge, Operand, label);
-                case OpType.Bge_un_s: return new Instruction(reader, OpCodes.Bge_Un, Operand, label);
-                case OpType.Bgt_s:    return new Instruction(reader, OpCodes.Bgt, Operand, label);
-                case OpType.Bgt_un_s: return new Instruction(reader, OpCodes.Bgt_Un, Operand, label);
-                case OpType.Ble_s:    return new Instruction(reader, OpCodes.Ble, Operand, label);
-                case OpType.Ble_un_s: return new Instruction(reader, OpCodes.Ble_Un, Operand, label);
-                case OpType.Blt_s:    return new Instruction(reader, OpCodes.Blt, Operand, label);
-                case OpType.Blt_un_s: return new Instruction(reader, OpCodes.Blt_Un, Operand, label);
-                case OpType.Bne_un_s: return new Instruction(reader, OpCodes.Bne_Un, Operand, label);
+                case OpType.Starg_s: return new Instruction(reader, OpCodes.Starg, new Operand((short)Operand.Int8), Label);
+                case OpType.Stloc_s: return new Instruction(reader, OpCodes.Stloc, new Operand((short)Operand.Int8), Label);
+                case OpType.Stloc_0: return new Instruction(reader, OpCodes.Stloc, 0, Label);
+                case OpType.Stloc_1: return new Instruction(reader, OpCodes.Stloc, 1, Label);
+                case OpType.Stloc_2: return new Instruction(reader, OpCodes.Stloc, 2, Label);
+                case OpType.Stloc_3: return new Instruction(reader, OpCodes.Stloc, 3, Label);
+                case OpType.Ldloca_s: return new Instruction(reader, OpCodes.Ldloca, new Operand((short)Operand.Int8), Label);
+                case OpType.Ldloc_s: return new Instruction(reader, OpCodes.Ldloc, new Operand((short)Operand.Int8), Label);
+                case OpType.Ldloc_0: return new Instruction(reader, OpCodes.Ldloc, 0, Label);
+                case OpType.Ldloc_1: return new Instruction(reader, OpCodes.Ldloc, 1, Label);
+                case OpType.Ldloc_2: return new Instruction(reader, OpCodes.Ldloc, 2, Label);
+                case OpType.Ldloc_3: return new Instruction(reader, OpCodes.Ldloc, 3, Label);
+                case OpType.Ldarga_s: return new Instruction(reader, OpCodes.Ldarga, new Operand((short)Operand.Int8), Label);
+                case OpType.Ldarg_s: return new Instruction(reader, OpCodes.Ldarg, new Operand((short)Operand.Int8), Label);
+                case OpType.Ldarg_0: return new Instruction(reader, OpCodes.Ldarg, 0, Label);
+                case OpType.Ldarg_1: return new Instruction(reader, OpCodes.Ldarg, 1, Label);
+                case OpType.Ldarg_2: return new Instruction(reader, OpCodes.Ldarg, 2, Label);
+                case OpType.Ldarg_3: return new Instruction(reader, OpCodes.Ldarg, 3, Label);
+                case OpType.Ldc_i4_s: return new Instruction(reader, OpCodes.Ldc_I4, new Operand((short)Operand.Int8), Label);
+                case OpType.Ldc_i4_m1: return new Instruction(reader, OpCodes.Ldc_I4, -1, Label);
+                case OpType.Ldc_i4_0: return new Instruction(reader, OpCodes.Ldc_I4, 0, Label);
+                case OpType.Ldc_i4_1: return new Instruction(reader, OpCodes.Ldc_I4, 1, Label);
+                case OpType.Ldc_i4_2: return new Instruction(reader, OpCodes.Ldc_I4, 2, Label);
+                case OpType.Ldc_i4_3: return new Instruction(reader, OpCodes.Ldc_I4, 3, Label);
+                case OpType.Ldc_i4_4: return new Instruction(reader, OpCodes.Ldc_I4, 4, Label);
+                case OpType.Ldc_i4_5: return new Instruction(reader, OpCodes.Ldc_I4, 5, Label);
+                case OpType.Ldc_i4_6: return new Instruction(reader, OpCodes.Ldc_I4, 6, Label);
+                case OpType.Ldc_i4_7: return new Instruction(reader, OpCodes.Ldc_I4, 7, Label);
+                case OpType.Ldc_i4_8: return new Instruction(reader, OpCodes.Ldc_I4, 8, Label);
+                case OpType.Leave_s:  return new Instruction(reader, OpCodes.Leave, Operand, Label);
+                case OpType.Brfalse_s:return new Instruction(reader, OpCodes.Brfalse, Operand, Label);
+                case OpType.Brtrue_s: return new Instruction(reader, OpCodes.Brtrue, Operand, Label);
+                case OpType.Br_s:     return new Instruction(reader, OpCodes.Br, Operand, Label);
+                case OpType.Beq_s:    return new Instruction(reader, OpCodes.Beq, Operand, Label);
+                case OpType.Bge_s:    return new Instruction(reader, OpCodes.Bge, Operand, Label);
+                case OpType.Bge_un_s: return new Instruction(reader, OpCodes.Bge_Un, Operand, Label);
+                case OpType.Bgt_s:    return new Instruction(reader, OpCodes.Bgt, Operand, Label);
+                case OpType.Bgt_un_s: return new Instruction(reader, OpCodes.Bgt_Un, Operand, Label);
+                case OpType.Ble_s:    return new Instruction(reader, OpCodes.Ble, Operand, Label);
+                case OpType.Ble_un_s: return new Instruction(reader, OpCodes.Ble_Un, Operand, Label);
+                case OpType.Blt_s:    return new Instruction(reader, OpCodes.Blt, Operand, Label);
+                case OpType.Blt_un_s: return new Instruction(reader, OpCodes.Blt_Un, Operand, Label);
+                case OpType.Bne_un_s: return new Instruction(reader, OpCodes.Bne_Un, Operand, Label);
                 default:              return this;
             }
         }
@@ -447,7 +457,7 @@ namespace CIL
             var backJumps = loops.IsEmpty()
                 ? ""
                 : loops.Aggregate(new StringBuilder("<- {"), (o, x) => o.Append(x).Append(",")).Append("}").ToString();
-            return label + ": " + OpCode.Name + " " + Resolve() + backJumps;
+            return Label + ": " + OpCode.Name + " " + Resolve() + backJumps;
         }
     }
 }
