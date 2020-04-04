@@ -10,7 +10,7 @@ using CIL.Expressions;
 
 namespace CIL.Tests
 {
-    public class CILTests
+    public class SimpleTests
     {
         [Fact]
         public static void TestSimple()
@@ -87,8 +87,8 @@ namespace CIL.Tests
         [Fact]
         public static void TestCalls()
         {
-            var main = new Action<string[]>(Main);
-            var methods = typeof(CILTests).GetMethods().Where(x => x != main.Method).ToArray();
+            var main = new Action<string[]>(MainOrig);
+            var methods = typeof(SimpleTests).GetMethods().Where(x => x != main.Method).ToArray();
             var il = main.Method.GetILReader();
             while (il.MoveNext())
             {
@@ -118,7 +118,35 @@ namespace CIL.Tests
             }
         }
 
-        public static void Main(string[] args)
+        class Foo
+        {
+            public string Bar { get; set; }
+            public string this[int i]
+            {
+                get { return null; }
+                set { }
+            }
+        }
+
+        [Fact]
+        public static void TestProperties()
+        {
+            Func<Foo, string> getFoo = x => x.Bar;
+            Expression<Func<Foo, string>> getFooE = x => x.Bar;
+            var e = LinqDecompiler.Decompile(getFoo);
+            Assert.Equal(getFooE.ToString(), e.ToString());
+        }
+
+        [Fact]
+        public static void TestPropertyIndexers()
+        {
+            Func<Foo, string> getFoo = x => x[2];
+            Expression<Func<Foo, string>> getFooE = x => x[2];
+            var e = LinqDecompiler.Decompile(getFoo);
+            Assert.Equal(getFooE.ToString(), e.ToString());
+        }
+
+        public static void MainOrig(string[] args)
         {
             TestSimple();
             TestEqConst();
@@ -127,6 +155,8 @@ namespace CIL.Tests
             TestStringOps();
             TestCalls();
             TestOtherCalls();
+            TestProperties();
+            TestPropertyIndexers();
             //TestBoolOps();
             //TestSwitch();
         }

@@ -29,7 +29,7 @@ namespace CIL
             if (method == null) throw new ArgumentNullException("method");
             this.module = method.Module;
             this.methodContext = method.IsConstructor ? null : method.GetGenericArguments();
-            this.typeContext = method.DeclaringType.GetGenericArguments();
+            this.typeContext = method.DeclaringType.GenericTypeArguments;
             this.Args = method.GetParameters();
             var body = method.GetMethodBody();
             this.Locals = body?.LocalVariables ?? new List<LocalVariableInfo>(0);

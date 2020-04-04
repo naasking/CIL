@@ -31,6 +31,9 @@ namespace CIL
         public virtual T If(T cond, T _then, T _else) { throw new NotSupportedException(); }
         public virtual T If(T cond, T _then) { throw new NotSupportedException(); }
         // 'obj' can be null for static methods
+        public virtual T Property(T obj, PropertyInfo getter) { throw new NotSupportedException(); }
+        public virtual T Property(T obj, PropertyInfo getter, IEnumerable<T> indexers) { throw new NotSupportedException(); }
+        //public virtual T Set(T obj, MethodBase setter, T value) { throw new NotSupportedException(); }
         public virtual T Call(MethodBase method, bool tailcall, T obj, IEnumerable<T> args) { throw new NotSupportedException(); }
         public virtual T CallIndirect(byte[] signature, T methodPtr, bool tailcall, IEnumerable<T> args) { throw new NotSupportedException(); }
         public virtual T GetPointer(MethodBase method, T obj) { throw new NotSupportedException(); }

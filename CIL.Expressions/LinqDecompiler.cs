@@ -56,6 +56,19 @@ namespace CIL.Expressions
         {
             return exp;
         }
+        public override Expression Property(Expression obj, PropertyInfo property)
+        {
+            return Expression.Property(obj, property);
+        }
+        public override Expression Property(Expression obj, PropertyInfo property, IEnumerable<Expression> indexers)
+        {
+            return Expression.Property(obj, property, indexers);
+        }
+        //public override Expression Set(Expression obj, MethodBase getter, Expression value)
+        //{
+        //    Expression.MemberInit()
+        //    return Expression.Property(obj, (MethodInfo)setter, );
+        //}
         public override Expression Call(MethodBase method, bool tailcall, Expression obj, IEnumerable<Expression> args)
         {
             return method.IsStatic ? Expression.Call((MethodInfo)method, args):

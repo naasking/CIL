@@ -5,6 +5,7 @@ using System.Text;
 using System.Reflection;
 using System.Reflection.Emit;
 using System.Diagnostics;
+using System.Runtime.CompilerServices;
 
 namespace CIL
 {
@@ -395,7 +396,18 @@ namespace CIL
                                            .Reverse()
                                            .ToArray();
                         var minstance = method.IsStatic ? default(T) : eval.Pop();
-                        eval.Push(exp.Call(method, tailcall, minstance, margs));
+                        var generated = method.GetCustomAttribute<CompilerGeneratedAttribute>();
+                        if (generated != null && method.IsSpecialName && /*method.IsHideBySig &&*/ (mparams.Length == 0 && method.Name.StartsWith("get_") || mparams.Length == 1 && method.Name.StartsWith("set_")))
+                        {
+                            // decode method call into a property access
+                            var pname = method.Name.Substring(4);
+                            var prop = method.DeclaringType.GetProperty(pname);
+                            eval.Push(margs.Length == 0 ? exp.Property(minstance, prop) : exp.Property(minstance, prop, margs));
+                        }
+                        else
+                        {
+                            eval.Push(exp.Call(method, tailcall, minstance, margs));
+                        }
                         tailcall = false;
                         break;
                     case OpType.Jmp:
