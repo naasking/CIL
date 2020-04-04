@@ -37,6 +37,7 @@ namespace CIL
         T Modulo(T left, T right);
         T If(T cond, T _then, T _else);
         T If(T cond, T _then);
+        T Loop(T body, IL.Label exit);
         // 'obj' can be null for static methods
         T Property(T obj, PropertyInfo getter);
         T Property(T obj, PropertyInfo getter, IEnumerable<T> indexers);

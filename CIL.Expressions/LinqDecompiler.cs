@@ -268,6 +268,11 @@ namespace CIL.Expressions
             return c.Value;
         }
 
+        public override Expression Loop(Expression body, IL.Label exit)
+        {
+            return Expression.Loop(body, Expression.Label());
+        }
+
         public static Expression<T> Decompile<T>(T func)
             where T : class
         {

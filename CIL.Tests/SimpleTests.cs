@@ -160,5 +160,25 @@ namespace CIL.Tests
             //TestBoolOps();
             //TestSwitch();
         }
+
+
+        static int LoopMethod(int i)
+        {
+            while (i > 0)
+            {
+                if (i % 2 == 0)
+                    i -= 3;
+                if (i > 100)
+                    break;
+                --i;
+            }
+            return i;
+        }
+
+        [Fact]
+        static void TestLoop()
+        {
+            var il = new Func<int, int>(LoopMethod).Method.GetInstructions();
+        }
     }
 }

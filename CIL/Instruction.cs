@@ -213,16 +213,10 @@ namespace CIL
         /// <summary>
         /// The position of this instruction in the code.
         /// </summary>
-        readonly ushort label;
-        
-        Instruction(ILReader reader, OpCode op, Operand arg, ushort label)
-        {
-            this.reader = reader;
-            this.OpCode = op;
-            this.Operand = arg;
-            this.label = (ushort)label;
-        }
+        internal readonly IL.Label label;
 
+        internal Lifo<IL.Label> loops;
+        
         /// <summary>
         /// Construct an instruction.
         /// </summary>
@@ -231,8 +225,12 @@ namespace CIL
         /// <param name="arg">The instruction operand.</param>
         /// <param name="label">The instruction's address in the bytecode.</param>
         public Instruction(ILReader reader, OpCode op, Operand arg, IL.Label label)
-            : this(reader, op, arg, (ushort)label.pos)
         {
+            this.reader = reader;
+            this.OpCode = op;
+            this.Operand = arg;
+            this.label = label;
+            this.loops = Lifo<IL.Label>.Empty;
         }
 
         /// <summary>
@@ -245,6 +243,9 @@ namespace CIL
             : this(reader, op, default(Operand), label)
         {
         }
+
+        public Instruction AddLoop(IL.Label exit) =>
+            new Instruction(reader, OpCode, Operand, label) { loops = loops.Push(exit) };
         
         /// <summary>
         /// Resolve the instruction's operand value.
@@ -443,7 +444,10 @@ namespace CIL
         /// <returns>A string representation of the instruction.</returns>
         public override string ToString()
         {
-            return "IL_" + label.ToString("X4") + ": " + OpCode.Name + " " + Resolve();
+            var backJumps = loops.IsEmpty()
+                ? ""
+                : loops.Aggregate(new StringBuilder("<- {"), (o, x) => o.Append(x).Append(",")).Append("}").ToString();
+            return label + ": " + OpCode.Name + " " + Resolve() + backJumps;
         }
     }
 }

@@ -90,7 +90,8 @@ namespace CIL
         /// <returns>True if successful, false if at the end of the instruction sequence.</returns>
         public bool MoveNext()
         {
-            if (i >= code.Length) return false;
+            if (i >= code.Length)
+                return false;
             var label = i;
             var op = IL.GetOpCode(code, ref i);
             var arg = default(Operand);

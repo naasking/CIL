@@ -86,5 +86,7 @@ namespace CIL
         public virtual Type TypeOf(T exp) { throw new NotSupportedException(); }
         public virtual bool IsConstant(T exp) { throw new NotSupportedException(); }
         public virtual object Value(T exp) { throw new NotSupportedException(); }
+
+        public virtual T Loop(T body, IL.Label exit) => throw new NotSupportedException();
     }
 }

@@ -62,6 +62,16 @@ namespace CIL
             {
                 return "IL_" + pos.ToString("X4");
             }
+            /// <summary>
+            /// Compare the positions in the bytecode stream.
+            /// </summary>
+            /// <param name="left"></param>
+            /// <param name="right"></param>
+            /// <returns></returns>
+            public static int operator -(Label left, Label right)
+            {
+                return left.pos - right.pos;
+            }
             public static bool operator <(Label left, Label right)
             {
                 return left.pos < right.pos;
@@ -125,12 +135,8 @@ namespace CIL
         /// </summary>
         /// <param name="code">The method to analyze.</param>
         /// <returns>A stream of instructions.</returns>
-        public static IEnumerable<Instruction> GetInstructions(this MethodBase code)
-        {
-            var il = new ILReader(code);
-            while (il.MoveNext())
-                yield return il.Current;
-        }
+        public static IEnumerable<Instruction> GetInstructions(this MethodBase code) =>
+            Decode(code.GetILReader());
 
         /// <summary>
         /// Decompile a method using the specified decompiler.
@@ -149,7 +155,33 @@ namespace CIL
             Process(il, decompiler, eval, new Dictionary<Label, T>(), args, il.Locals.Select(decompiler.Local).ToArray());
             return eval.Count > 1 ? decompiler.Block(eval.Reverse()) : eval.Pop();
         }
-        
+
+        static List<Instruction> Decode(ILReader il)
+        {
+            var bc = new List<Instruction>();
+            while (il.MoveNext())
+            {
+                bc.Add(il.Current);
+                switch (il.Current.OpCode.Type())
+                {
+                    case OpType.Brfalse:
+                    case OpType.Brfalse_s:
+                    case OpType.Brtrue:
+                    case OpType.Brtrue_s:
+                    case OpType.Br:
+                    case OpType.Br_s:
+                        var target = il.Current.Operand.Label;
+                        if (target < il.Current.label)
+                        {
+                            var i = bc.FindIndex(x => x.label == target);
+                            bc[i] = bc[i].AddLoop(il.Current.label);
+                        }
+                        break;
+                }
+            }
+            return bc;
+        }
+
         static void Process<T>(ILReader il, IExpression<T> exp, Stack<T> eval, Dictionary<Label, T> env, T[] args, T[] locals)
         {
             // the simplest way to add branch sharing, but less efficient
@@ -237,6 +269,7 @@ namespace CIL
                     //----------- Branching instructions ---------
                     case OpType.Br:
                     case OpType.Br_s:
+                        //FIXME: process in a nested call?
                         il.Seek(x.Operand.Label); // seek to branch label
                         //eval.Push(exp.Goto(eval.Pop()));
                         break;
