@@ -253,6 +253,21 @@ namespace CIL
         /// The series of labels that jump to this instruction.
         /// </summary>
         public IEnumerable<IL.Label> Loops => loops;
+
+        /// <summary>
+        /// The instruction's size.
+        /// </summary>
+        public int Size => OpCode.Size + reader.OperandSize(OpCode.OperandType, Operand.MetadataToken);
+
+        // Right now the bytecode exactly matches the output from ildasm in a roundabout way by decoding
+        // the operand data twice. I could simplify by removing Intsruction.Operand and replacing with an
+        // Int32 operandMetadata field. Depending on OpCode.OperandType, it will call a
+        // reader.Resolve*(operandMetadata) method, which will return an Operand value or other operand info.
+        // So accessing operands is a little slower, but it's uniform across switches, inline values, etc.
+        // and the size of the Instruction struct is smaller since we don't need to accomodate double alongside
+        // int in the instruction itself.
+        //int operandMetadata;
+        //public Operand Operand2 => reader.ResolveInt32(operandMetadata);
         
         /// <summary>
         /// Resolve the instruction's operand value.
@@ -267,7 +282,7 @@ namespace CIL
                 case OperandType.InlineR: return Operand.Float64;
                 case OperandType.ShortInlineR: return Operand.Float32;
                 case OperandType.InlineI: return Operand.Int32;
-                case OperandType.InlineBrTarget: return Operand.Label.ToString();
+                case OperandType.InlineBrTarget: return Operand.Label; //FIXME: is this correct?
                 case OperandType.InlineSwitch: return Operand.MetadataToken;
                 case OperandType.InlineField: return ResolveField();
                 case OperandType.InlineMethod: return ResolveMethod();
@@ -276,7 +291,7 @@ namespace CIL
                 case OperandType.InlineTok: return ResolveMember();
                 case OperandType.InlineType: return ResolveType();
                 case OperandType.InlineVar: return Operand.Int16;
-                case OperandType.ShortInlineBrTarget: return Operand.Label.ToString();
+                case OperandType.ShortInlineBrTarget: return Operand.Label; //FIXME: is this correct?
                 case OperandType.ShortInlineI: return Operand.Int8;
                 case OperandType.ShortInlineVar: return Operand.Int8;
                 default: //throw new ArgumentException("Unknown operand type.");

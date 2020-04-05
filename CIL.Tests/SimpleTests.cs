@@ -183,11 +183,13 @@ namespace CIL.Tests
         static void TestLoop()
         {
             var il = new Func<int, int>(LoopMethod).Method.GetInstructions();
-            Assert.Single(il[3].Loops);
-            var source = il[3].Loops.First();
+            Assert.NotNull(il[2].Loops);
+            Assert.Single(il[2].Loops);
+            var source = il[2].Loops.First();
             var br = il[source];
             Assert.True(br.OpCode.IsBranch());
-            Assert.Equal(il.GetLabel(3), br.Operand.Label);
+            Assert.Equal(il.GetLabel(2), br.Operand.Label);
+            Assert.Equal("IL_0000: nop ", il.ToString().Split('\r', '\n').First());
         }
     }
 }

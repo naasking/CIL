@@ -154,6 +154,9 @@ namespace CIL
         }
 
         #region Internal operations on instructions
+        //internal int ResolveInt32(int pos) =>
+        //    BitConverter.ToInt32(code, pos);
+
         internal FieldInfo ResolveField(int token)
         {
             return module.ResolveField(token, typeContext, methodContext);
@@ -194,6 +197,37 @@ namespace CIL
                 var offset = BitConverter.ToInt32(code, pos);
                 yield return new KeyValuePair<int, IL.Label>(offset, new IL.Label(basep + offset));
                 pos += 4;
+            }
+        }
+
+        internal int OperandSize(OperandType type, int metadata)
+        {
+            switch (type)
+            {
+                case OperandType.InlineSwitch:
+                    var count = BitConverter.ToInt32(code, metadata);
+                    return 4 + 4 * count; // skip 'count' and 32bit branch target list
+                case OperandType.InlineI:
+                case OperandType.InlineMethod:
+                case OperandType.InlineString:
+                case OperandType.InlineSig:
+                case OperandType.InlineField:
+                case OperandType.InlineType:
+                case OperandType.InlineTok:
+                case OperandType.ShortInlineR:
+                case OperandType.InlineBrTarget:
+                    return 4;
+                case OperandType.InlineR:
+                case OperandType.InlineI8:
+                    return 8;
+                case OperandType.InlineVar:
+                    return 2;
+                case OperandType.ShortInlineBrTarget:
+                case OperandType.ShortInlineI:
+                case OperandType.ShortInlineVar:
+                    return 1;
+                default:
+                    return 0;
             }
         }
         #endregion

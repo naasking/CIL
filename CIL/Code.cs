@@ -49,7 +49,8 @@ namespace CIL
         /// </summary>
         /// <param name="index">The index of the instruction to find.</param>
         /// <returns>The instruction's label.</returns>
-        public IL.Label GetLabel(int index) => new IL.Label(Array.IndexOf(labelIndex, (ushort)index));
+        public IL.Label GetLabel(int index) =>
+            new IL.Label(Array.IndexOf(labelIndex, (ushort)index));
 
         /// <inheritdoc/>
         public IEnumerator<Instruction> GetEnumerator()
@@ -69,10 +70,11 @@ namespace CIL
         internal int Add(int offset, ref Instruction instr)
         {
             instructions[count] = instr;
-            for (var i = 0; i < instr.OpCode.Size; ++i)
+            var size = instr.Size;
+            for (var i = 0; i < size; ++i)
                 labelIndex[offset + i] = (ushort)count;
             ++count;
-            return instr.OpCode.Size;
+            return size;
         }
 
         /// <summary>
@@ -87,7 +89,7 @@ namespace CIL
         public override string ToString()
         {
             var buf = new StringBuilder();
-            for (int i = 0, label = 0; i < count; ++i, label += instructions[i].OpCode.Size)
+            for (int i = 0, label = 0; i < count; label += instructions[i].Size, ++i)
                 buf.Append(new IL.Label(label)).Append(": ").Append(instructions[i]).AppendLine();
             return buf.ToString();
         }

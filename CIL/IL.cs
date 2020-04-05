@@ -145,16 +145,12 @@ namespace CIL
         /// </summary>
         /// <param name="op">The opcode.</param>
         /// <returns>True if the opcode is a branch instruction.</returns>
-        public static bool IsBranch(this OpCode op)
+        public static bool IsBranch(this OpCode op) 
         {
-            switch (op.Type())
+            switch (op.FlowControl)
             {
-                case OpType.Brfalse:
-                case OpType.Brfalse_s:
-                case OpType.Brtrue:
-                case OpType.Brtrue_s:
-                case OpType.Br:
-                case OpType.Br_s:
+                case FlowControl.Branch:
+                case FlowControl.Cond_Branch:
                     return true;
                 default:
                     return false;
