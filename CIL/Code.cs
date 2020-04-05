@@ -29,14 +29,14 @@ namespace CIL
         /// The instruction for the given label.
         /// </summary>
         /// <param name="label">The instruction's offset in the bytecode stream.</param>
-        /// <returns></returns>
+        /// <returns>A reference to the instruction.</returns>
         public ref Instruction this[IL.Label label] => ref this[labelIndex[label.Offset]];
 
         /// <summary>
         /// The instruction at the given index.
         /// </summary>
         /// <param name="index"></param>
-        /// <returns></returns>
+        /// <returns>A reference to the instruction.</returns>
         public ref Instruction this[int index] => ref instructions[index];
 
         /// <summary>
@@ -47,8 +47,8 @@ namespace CIL
         /// <summary>
         /// Gets the label for the corresponding instruction.
         /// </summary>
-        /// <param name="index"></param>
-        /// <returns></returns>
+        /// <param name="index">The index of the instruction to find.</param>
+        /// <returns>The instruction's label.</returns>
         public IL.Label GetLabel(int index) => new IL.Label(Array.IndexOf(labelIndex, (ushort)index));
 
         /// <inheritdoc/>
@@ -65,7 +65,7 @@ namespace CIL
         /// </summary>
         /// <param name="offset">The current instruction being added.</param>
         /// <param name="instr">The instruction to add.</param>
-        /// <returns></returns>
+        /// <returns>The size of the opcode.</returns>
         internal int Add(int offset, ref Instruction instr)
         {
             instructions[count] = instr;
@@ -78,8 +78,8 @@ namespace CIL
         /// <summary>
         /// Add a loop
         /// </summary>
-        /// <param name="offset"></param>
-        /// <param name="jumpTarget"></param>
+        /// <param name="offset">The offset/label of the branch instruction.</param>
+        /// <param name="jumpTarget">The target of the branch instruction.</param>
         internal void AddLoop(int offset, IL.Label jumpTarget) =>
             this[jumpTarget].AddLoop(new IL.Label(offset));
 

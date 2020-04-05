@@ -19,6 +19,7 @@ namespace CIL
         ExceptionHandlingClauseOptions?[] scopes;
         int i;
         int bound;
+        internal Instruction current;
 
         /// <summary>
         /// Construct an instance of a CIL reader.
@@ -40,8 +41,6 @@ namespace CIL
             //Dictionary<int, ScopeType> ??
         }
 
-        internal Instruction current;
-
         /// <summary>
         /// The current instruction.
         /// </summary>
@@ -60,31 +59,17 @@ namespace CIL
         /// <summary>
         /// Generate a label marking a position in the instruction stream.
         /// </summary>
-        /// <returns></returns>
-        public IL.Label Mark()
-        {
-            return new IL.Label(i);
-        }
+        /// <returns>The label for the current position in the instruction sequence.</returns>
+        public IL.Label Mark() => new IL.Label(i);
 
         /// <summary>
         /// Move the reader's position to the marked position.
         /// </summary>
-        /// <param name="mark"></param>
+        /// <param name="mark">The offset in the instruction sequence to move the cursor to.</param>
         public void Seek(IL.Label mark)
         {
             this.i = mark.Offset;
         }
-
-        ///// <summary>
-        ///// Move the reader's position to the marked position.
-        ///// </summary>
-        ///// <param name="mark"></param>
-        //public void Seek(IL.Label mark, IL.Label bound)
-        //{
-        //    if (bound < mark) throw new ArgumentOutOfRangeException("bound", "The IL.Label's upper bound must be greater than or equal to the mark.");
-        //    this.i = mark.pos;
-        //    this.bound = bound.pos;
-        //}
 
         /// <summary>
         /// Move to the next instruction.

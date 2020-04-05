@@ -81,12 +81,7 @@ namespace CIL
             /// </summary>
             public int Offset { get; private set; }
 
-            /// <summary>
-            /// Compare the positions in the bytecode stream.
-            /// </summary>
-            /// <param name="left"></param>
-            /// <param name="right"></param>
-            /// <returns></returns>
+            /// <inheritdoc/>
             public static int operator -(Label left, Label right)
             {
                 return left.Offset - right.Offset;
@@ -126,9 +121,9 @@ namespace CIL
         /// <summary>
         /// Get the OpCode of the corresponding byte.
         /// </summary>
-        /// <param name="ops"></param>
-        /// <param name="index"></param>
-        /// <returns></returns>
+        /// <param name="ops">The bytecode to analyze.</param>
+        /// <param name="index">The index into the bytecode.</param>
+        /// <returns>The <see cref="OpCode"/> at the given index of the bytecode stream.</returns>
         public static OpCode GetOpCode(byte[] ops, ref int index)
         {
             var o = ops[index++];
@@ -138,8 +133,8 @@ namespace CIL
         /// <summary>
         /// The instruction type of the opcode.
         /// </summary>
-        /// <param name="op"></param>
-        /// <returns></returns>
+        /// <param name="op">The opcode.</param>
+        /// <returns>The opcode type.</returns>
         public static OpType Type(this OpCode op)
         {
             return (OpType)op.Value;
@@ -148,8 +143,8 @@ namespace CIL
         /// <summary>
         /// Check if the given opcode is a branching instruction.
         /// </summary>
-        /// <param name="op"></param>
-        /// <returns></returns>
+        /// <param name="op">The opcode.</param>
+        /// <returns>True if the opcode is a branch instruction.</returns>
         public static bool IsBranch(this OpCode op)
         {
             switch (op.Type())

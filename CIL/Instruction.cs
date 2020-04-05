@@ -439,16 +439,13 @@ namespace CIL
         /// <summary>
         /// Resolve the set of branches in a given switch statement.
         /// </summary>
-        /// <returns></returns>
+        /// <returns>A sequence of offset and branch target pairs.</returns>
         public IEnumerable<KeyValuePair<int, IL.Label>> ResolveBranches()
         {
             return reader.ResolveBranches(Operand.Int32);
         }
 
-        /// <summary>
-        /// Returns a string representation of the instruction.
-        /// </summary>
-        /// <returns>A string representation of the instruction.</returns>
+        /// <inheritdoc/>
         public override string ToString()
         {
             var backJumps = loops.IsEmpty()
