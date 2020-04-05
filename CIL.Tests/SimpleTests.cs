@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using System.Linq.Expressions;
+using System.Reflection.Emit;
 using Xunit;
 using CIL.Expressions;
 
@@ -146,7 +147,7 @@ namespace CIL.Tests
             Assert.Equal(getFooE.ToString(), e.ToString());
         }
 
-        public static void MainOrig(string[] args)
+        static void MainOrig(string[] args)
         {
             TestSimple();
             TestEqConst();
@@ -182,10 +183,11 @@ namespace CIL.Tests
         static void TestLoop()
         {
             var il = new Func<int, int>(LoopMethod).Method.GetInstructions();
-            Assert.Single(il.ElementAt(2).Loops);
-            var source = il.ElementAt(2).Loops.First();
-            Assert.Equal(source, il.Last(x => x.Label == source).Label);
-            //var e = new Func<int, int>(LoopMethod).Method.Decompile(new LinqDecompiler(), out var args);
+            Assert.Single(il[3].Loops);
+            var source = il[3].Loops.First();
+            var br = il[source];
+            Assert.True(br.OpCode.IsBranch());
+            Assert.Equal(il.GetLabel(3), br.Operand.Label);
         }
     }
 }

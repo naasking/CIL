@@ -24,7 +24,7 @@ namespace CIL
         /// Construct an instance of a CIL reader.
         /// </summary>
         /// <param name="method">The method to analyze.</param>
-        public ILReader(MethodBase method)
+        public ILReader(MethodBase method, out int byteCodeLength)
         {
             if (method == null) throw new ArgumentNullException("method");
             this.module = method.Module;
@@ -34,16 +34,18 @@ namespace CIL
             var body = method.GetMethodBody();
             this.Locals = body?.LocalVariables ?? new List<LocalVariableInfo>(0);
             this.code = body?.GetILAsByteArray() ?? new byte[0];
-            this.bound = code.Length;
+            byteCodeLength = this.bound = code.Length;
             //method.GetMethodBody().ExceptionHandlingClauses[0].Flags == ExceptionHandlingClauseOptions
             // enum ScopeType { Normal, Try, Catch, Finally }
             //Dictionary<int, ScopeType> ??
         }
 
+        internal Instruction current;
+
         /// <summary>
         /// The current instruction.
         /// </summary>
-        public Instruction Current { get; private set; }
+        public Instruction Current => current;
 
         /// <summary>
         /// The method's locals.
@@ -70,7 +72,7 @@ namespace CIL
         /// <param name="mark"></param>
         public void Seek(IL.Label mark)
         {
-            this.i = mark.pos;
+            this.i = mark.Offset;
         }
 
         ///// <summary>
@@ -142,7 +144,7 @@ namespace CIL
                     i += 1;
                     break;
             }
-            Current = new Instruction(this, op, arg, new IL.Label(label));
+            current = new Instruction(this, op, arg);
             return true;
         }
 

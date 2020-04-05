@@ -41,31 +41,46 @@ namespace CIL
         /// </summary>
         public struct Label : IEquatable<Label>, IComparable<Label>
         {
-            internal int pos;
-            public Label(int pos)
+            /// <summary>
+            /// Create a label for the given offste
+            /// </summary>
+            /// <param name="offset"></param>
+            internal Label(int offset)
             {
-                this.pos = pos;
+                if (offset < 0)
+                    throw new ArgumentException("Invalid instruction offset.");
+                this.Offset = offset;
             }
+            /// <inheritdoc/>
             public override bool Equals(object obj)
             {
                 return obj is Label && Equals((Label)obj);
             }
+            /// <inheritdoc/>
             public override int GetHashCode()
             {
-                return pos;
+                return Offset;
             }
+            /// <inheritdoc/>
             public bool Equals(Label other)
             {
                 return this == other;
             }
+            /// <inheritdoc/>
             public int CompareTo(Label other)
             {
-                return pos.CompareTo(other.pos);
+                return Offset.CompareTo(other.Offset);
             }
+            /// <inheritdoc/>
             public override string ToString()
             {
-                return "IL_" + pos.ToString("X4");
+                return "IL_" + Offset.ToString("X4");
             }
+            /// <summary>
+            /// The offset of the instruction in the bytecode stream.
+            /// </summary>
+            public int Offset { get; private set; }
+
             /// <summary>
             /// Compare the positions in the bytecode stream.
             /// </summary>
@@ -74,31 +89,37 @@ namespace CIL
             /// <returns></returns>
             public static int operator -(Label left, Label right)
             {
-                return left.pos - right.pos;
+                return left.Offset - right.Offset;
             }
+            /// <inheritdoc/>
             public static bool operator <(Label left, Label right)
             {
-                return left.pos < right.pos;
+                return left.Offset < right.Offset;
             }
+            /// <inheritdoc/>
             public static bool operator >(Label left, Label right)
             {
-                return left.pos > right.pos;
+                return left.Offset > right.Offset;
             }
+            /// <inheritdoc/>
             public static bool operator <=(Label left, Label right)
             {
-                return left.pos <= right.pos;
+                return left.Offset <= right.Offset;
             }
+            /// <inheritdoc/>
             public static bool operator >=(Label left, Label right)
             {
-                return left.pos >= right.pos;
+                return left.Offset >= right.Offset;
             }
+            /// <inheritdoc/>
             public static bool operator ==(Label left, Label right)
             {
-                return left.pos == right.pos;
+                return left.Offset == right.Offset;
             }
+            /// <inheritdoc/>
             public static bool operator !=(Label left, Label right)
             {
-                return left.pos != right.pos;
+                return left.Offset != right.Offset;
             }
         }
 
@@ -125,13 +146,44 @@ namespace CIL
         }
 
         /// <summary>
+        /// Check if the given opcode is a branching instruction.
+        /// </summary>
+        /// <param name="op"></param>
+        /// <returns></returns>
+        public static bool IsBranch(this OpCode op)
+        {
+            switch (op.Type())
+            {
+                case OpType.Brfalse:
+                case OpType.Brfalse_s:
+                case OpType.Brtrue:
+                case OpType.Brtrue_s:
+                case OpType.Br:
+                case OpType.Br_s:
+                    return true;
+                default:
+                    return false;
+            }
+        }
+
+        /// <summary>
         /// Get the instructions from the given method.
         /// </summary>
         /// <param name="code">The method to analyze.</param>
         /// <returns>An <seealso cref="ILReader"/> that iterates over the bytecode instructions.</returns>
         public static ILReader GetILReader(this MethodBase code)
         {
-            return new ILReader(code);
+            return code.GetILReader(out var byteCodeLength);
+        }
+
+        /// <summary>
+        /// Get the instructions from the given method.
+        /// </summary>
+        /// <param name="code">The method to analyze.</param>
+        /// <returns>An <seealso cref="ILReader"/> that iterates over the bytecode instructions.</returns>
+        public static ILReader GetILReader(this MethodBase code, out int byteCodeLength)
+        {
+            return new ILReader(code, out byteCodeLength);
         }
 
         /// <summary>
@@ -139,8 +191,8 @@ namespace CIL
         /// </summary>
         /// <param name="code">The method to analyze.</param>
         /// <returns>A stream of instructions.</returns>
-        public static IEnumerable<Instruction> GetInstructions(this MethodBase code) =>
-            Decode(code.GetILReader());
+        public static Code GetInstructions(this MethodBase code) =>
+            Decode(code.GetILReader(out var byteCodeLength), new Code(byteCodeLength), 0);
 
         /// <summary>
         /// Decompile a method using the specified decompiler.
@@ -160,44 +212,29 @@ namespace CIL
             return eval.Count > 1 ? decompiler.Block(eval.Reverse()) : eval.Pop();
         }
 
-        static List<Instruction> Decode(ILReader il)
+        /// <summary>
+        /// First-pass over the instruction stream decodes all instructions and
+        /// tags all loops. A second pass can translate decoded instructions into
+        /// high-level expressions.
+        /// 
+        /// Might be able to merge two passes into a single-pass decode+expression
+        /// by tracking a Dictionary{IL.Label, T}.
+        /// </summary>
+        static Code Decode(ILReader il, Code bc, int offset)
         {
-            var bc = new List<Instruction>();
             while (il.MoveNext())
             {
-                bc.Add(il.Current);
-                switch (il.Current.OpCode.Type())
+                var size = bc.Add(offset, ref il.current);
+                if (il.Current.OpCode.IsBranch())
                 {
-                    case OpType.Brfalse:
-                    case OpType.Brfalse_s:
-                    case OpType.Brtrue:
-                    case OpType.Brtrue_s:
-                    case OpType.Br:
-                    case OpType.Br_s:
-                        var target = il.Current.Operand.Label;
-                        if (target < il.Current.Label)
-                        {
-                            //Because instructions may take more than 1 byte, label.pos in IL is always >=
-                            //than corresponding index of instruction in bc, so we can't use target.pos to 
-                            //find the instruction being jumped to, so we search for it. Might be a good way
-                            //to guess a closer starting index for the search.
-                            //FIXME: not clear whether this heuristic for a closer starting index will
-                            //hold in all cases.
-                            var i = FindInstr(bc, (int)Math.Floor(target.pos * (double)bc.Count / il.Current.Label.pos), target);
-                            //var i = FindInstr(bc, 0, target);
-                            bc[i] = bc[i].AddLoop(il.Current.Label);
-                        }
-                        break;
+                    // tag any branches that jump back in the instruction sequence as loops
+                    var target = il.Current.Operand.Label;
+                    if (target.Offset < offset)
+                        bc.AddLoop(offset, target);
                 }
+                offset += size;
             }
             return bc;
-        }
-
-        static int FindInstr(List<Instruction> il, int i, IL.Label label)
-        {
-            while (il[i].Label != label)
-                ++i;
-            return i;
         }
 
         static void Process<T>(ILReader il, IExpression<T> exp, Stack<T> eval, Dictionary<Label, T> env, T[] args, T[] locals)
