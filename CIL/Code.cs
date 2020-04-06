@@ -52,6 +52,14 @@ namespace CIL
         public IL.Label GetLabel(int index) =>
             new IL.Label(Array.IndexOf(labelIndex, (ushort)index));
 
+        /// <summary>
+        /// Gets the corresponding instruction index for the given label.
+        /// </summary>
+        /// <param name="index">The label to map to an instruction index.</param>
+        /// <returns>The instruction's index.</returns>
+        public int GetIndex(IL.Label label) =>
+            labelIndex[label.Offset];
+
         /// <inheritdoc/>
         public IEnumerator<Instruction> GetEnumerator()
         {

@@ -200,13 +200,19 @@ namespace CIL
             }
         }
 
+        /// <summary>
+        /// Extract the exact operand size for the given operand type and operand metadata.
+        /// </summary>
+        /// <param name="type"></param>
+        /// <param name="metadata"></param>
+        /// <returns></returns>
         internal int OperandSize(OperandType type, int metadata)
         {
             switch (type)
             {
                 case OperandType.InlineSwitch:
                     var count = BitConverter.ToInt32(code, metadata);
-                    return 4 + 4 * count; // skip 'count' and 32bit branch target list
+                    return 4 + 4 * count;
                 case OperandType.InlineI:
                 case OperandType.InlineMethod:
                 case OperandType.InlineString:
