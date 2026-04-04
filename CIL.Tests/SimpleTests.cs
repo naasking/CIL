@@ -143,6 +143,201 @@ namespace CIL.Tests
             Assert.Equal(getFooE.ToString(), e.ToString());
         }
 
+        #region Exception handling test methods
+
+        static int TryCatchMethod(string s)
+        {
+            try
+            {
+                return int.Parse(s);
+            }
+            catch (FormatException)
+            {
+                return -1;
+            }
+        }
+
+        static int TryFinallyMethod(int x)
+        {
+            try
+            {
+                x = x * 2;
+            }
+            finally
+            {
+                x = x + 1;
+            }
+            return x;
+        }
+
+        static int TryCatchFinallyMethod(string s)
+        {
+            int result;
+            try
+            {
+                result = int.Parse(s);
+            }
+            catch (FormatException)
+            {
+                result = -1;
+            }
+            catch (OverflowException)
+            {
+                result = -2;
+            }
+            finally
+            {
+                result = 0;
+            }
+            return result;
+        }
+
+        static int NestedTryCatchMethod(string s)
+        {
+            try
+            {
+                try
+                {
+                    return int.Parse(s);
+                }
+                catch (FormatException)
+                {
+                    return -1;
+                }
+            }
+            catch (Exception)
+            {
+                return -2;
+            }
+        }
+
+        #endregion
+
+        [Fact]
+        public static void TestTryCatch()
+        {
+            var il = new Func<string, int>(TryCatchMethod).Method.GetInstructions();
+            var handlers = il.ExceptionHandlers;
+
+            Assert.Single(handlers);
+            Assert.True(handlers[0].IsCatch);
+            Assert.Equal(typeof(FormatException), handlers[0].CatchType);
+
+            // try start instruction should be flagged
+            Assert.True(il[handlers[0].TryStart].IsTryStart);
+            Assert.True(il[handlers[0].TryStart].IsLeader);
+
+            // handler start instruction should be flagged
+            Assert.True(il[handlers[0].HandlerStart].IsHandlerStart);
+            Assert.True(il[handlers[0].HandlerStart].IsLeader);
+
+            // try region must precede handler region
+            Assert.True(handlers[0].TryStart < handlers[0].HandlerStart);
+            Assert.True(handlers[0].TryEnd <= handlers[0].HandlerStart);
+        }
+
+        [Fact]
+        public static void TestTryFinally()
+        {
+            var il = new Func<int, int>(TryFinallyMethod).Method.GetInstructions();
+            var handlers = il.ExceptionHandlers;
+
+            Assert.Single(handlers);
+            Assert.True(handlers[0].IsFinally);
+            Assert.Null(handlers[0].CatchType);
+
+            Assert.True(il[handlers[0].TryStart].IsTryStart);
+            Assert.True(il[handlers[0].HandlerStart].IsHandlerStart);
+
+            // the handler must contain an endfinally
+            bool foundEndFinally = false;
+            for (int i = il.GetIndex(handlers[0].HandlerStart); i < il.Count; i++)
+            {
+                if (il[i].OpCode.Type() == OpType.Endfinally)
+                {
+                    foundEndFinally = true;
+                    break;
+                }
+            }
+            Assert.True(foundEndFinally);
+        }
+
+        [Fact]
+        public static void TestTryCatchFinally()
+        {
+            var il = new Func<string, int>(TryCatchFinallyMethod).Method.GetInstructions();
+            var handlers = il.ExceptionHandlers;
+
+            // should have 3 regions: catch(FormatException), catch(OverflowException), finally
+            Assert.Equal(3, handlers.Length);
+
+            var catches = handlers.Where(h => h.IsCatch).ToArray();
+            var finallys = handlers.Where(h => h.IsFinally).ToArray();
+            Assert.Equal(2, catches.Length);
+            Assert.Single(finallys);
+
+            // verify catch types
+            var catchTypes = catches.Select(c => c.CatchType).ToArray();
+            Assert.Contains(typeof(FormatException), catchTypes);
+            Assert.Contains(typeof(OverflowException), catchTypes);
+
+            // all handlers should be flagged
+            foreach (var h in handlers)
+            {
+                Assert.True(il[h.TryStart].IsTryStart);
+                Assert.True(il[h.HandlerStart].IsHandlerStart);
+            }
+        }
+
+        [Fact]
+        public static void TestNestedTryCatch()
+        {
+            var il = new Func<string, int>(NestedTryCatchMethod).Method.GetInstructions();
+            var handlers = il.ExceptionHandlers;
+
+            Assert.Equal(2, handlers.Length);
+
+            // both should be catches
+            Assert.All(handlers, h => Assert.True(h.IsCatch));
+
+            var catchTypes = handlers.Select(c => c.CatchType).ToArray();
+            Assert.Contains(typeof(FormatException), catchTypes);
+            Assert.Contains(typeof(Exception), catchTypes);
+
+            // the outer try should encompass the inner try
+            var inner = handlers.First(h => h.CatchType == typeof(FormatException));
+            var outer = handlers.First(h => h.CatchType == typeof(Exception));
+            Assert.True(outer.TryStart <= inner.TryStart);
+            Assert.True(outer.TryEnd >= inner.TryEnd);
+        }
+
+        [Fact]
+        public static void TestExceptionRegionToString()
+        {
+            var il = new Func<string, int>(TryCatchMethod).Method.GetInstructions();
+            var h = il.ExceptionHandlers[0];
+            var str = h.ToString();
+            Assert.Contains(".try", str);
+            Assert.Contains("catch(FormatException)", str);
+        }
+
+        [Fact]
+        public static void TestNoExceptionHandlers()
+        {
+            var il = new Func<int, int>(LoopMethod).Method.GetInstructions();
+            Assert.Empty(il.ExceptionHandlers);
+            // no instructions should have exception flags
+            Assert.DoesNotContain(il, i => i.IsTryStart);
+            Assert.DoesNotContain(il, i => i.IsHandlerStart);
+        }
+
+        [Fact]
+        public static void TestILReaderExceptionHandlers()
+        {
+            var reader = new Func<string, int>(TryCatchFinallyMethod).Method.GetILReader();
+            Assert.Equal(3, reader.ExceptionHandlers.Length);
+        }
+
         static void MainOrig(string[] args)
         {
             TestSimple();
@@ -205,7 +400,7 @@ namespace CIL.Tests
         }
 
         [Fact]
-        static void TestGoto()
+        public static void TestGoto()
         {
             var il = new Func<int, int>(GotoMethod).Method.GetInstructions();
         }

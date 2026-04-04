@@ -222,6 +222,64 @@ namespace CIL
         Leader = 1,
         LoopHeader = 2,
         BreakTarget = 4,
+        TryStart = 8,
+        HandlerStart = 16,
+        FilterStart = 32,
+    }
+
+    /// <summary>
+    /// A decoded exception handling region (try/catch/finally/fault/filter).
+    /// </summary>
+    public struct ExceptionRegion
+    {
+        /// <summary>The type of handler.</summary>
+        public readonly ExceptionHandlingClauseOptions Flags;
+        /// <summary>Start of the try block.</summary>
+        public readonly IL.Label TryStart;
+        /// <summary>Exclusive end of the try block.</summary>
+        public readonly IL.Label TryEnd;
+        /// <summary>Start of the handler block.</summary>
+        public readonly IL.Label HandlerStart;
+        /// <summary>Exclusive end of the handler block.</summary>
+        public readonly IL.Label HandlerEnd;
+        /// <summary>Start of the filter block (only valid when Flags is Filter).</summary>
+        public readonly IL.Label FilterStart;
+        /// <summary>The caught exception type (only valid when Flags is Clause).</summary>
+        public readonly Type CatchType;
+
+        internal ExceptionRegion(
+            ExceptionHandlingClauseOptions flags,
+            IL.Label tryStart, IL.Label tryEnd,
+            IL.Label handlerStart, IL.Label handlerEnd,
+            IL.Label filterStart, Type catchType)
+        {
+            Flags = flags;
+            TryStart = tryStart;
+            TryEnd = tryEnd;
+            HandlerStart = handlerStart;
+            HandlerEnd = handlerEnd;
+            FilterStart = filterStart;
+            CatchType = catchType;
+        }
+
+        /// <summary>Whether this is a catch clause.</summary>
+        public bool IsCatch => Flags == ExceptionHandlingClauseOptions.Clause;
+        /// <summary>Whether this is a finally clause.</summary>
+        public bool IsFinally => Flags == ExceptionHandlingClauseOptions.Finally;
+        /// <summary>Whether this is a fault clause.</summary>
+        public bool IsFault => Flags == ExceptionHandlingClauseOptions.Fault;
+        /// <summary>Whether this is a filter clause.</summary>
+        public bool IsFilter => Flags == ExceptionHandlingClauseOptions.Filter;
+
+        /// <inheritdoc/>
+        public override string ToString()
+        {
+            var kind = IsCatch   ? $"catch({CatchType?.Name})" :
+                       IsFinally ? "finally" :
+                       IsFault   ? "fault" :
+                                   "filter";
+            return $".try {TryStart}-{TryEnd} {kind} {HandlerStart}-{HandlerEnd}";
+        }
     }
 
     /// <summary>
@@ -304,6 +362,21 @@ namespace CIL
         /// Whether this instruction is a break target (exit from a loop).
         /// </summary>
         public bool IsBreakTarget => (flags & InstructionFlags.BreakTarget) != 0;
+
+        /// <summary>
+        /// Whether this instruction begins a try block.
+        /// </summary>
+        public bool IsTryStart => (flags & InstructionFlags.TryStart) != 0;
+
+        /// <summary>
+        /// Whether this instruction begins an exception handler (catch/finally/fault).
+        /// </summary>
+        public bool IsHandlerStart => (flags & InstructionFlags.HandlerStart) != 0;
+
+        /// <summary>
+        /// Whether this instruction begins a filter evaluation block.
+        /// </summary>
+        public bool IsFilterStart => (flags & InstructionFlags.FilterStart) != 0;
 
         /// <summary>
         /// Mark the colour.

@@ -192,8 +192,13 @@ namespace CIL
         /// </summary>
         /// <param name="code">The method to analyze.</param>
         /// <returns>A stream of instructions.</returns>
-        public static Code GetInstructions(this MethodBase code) =>
-            CFA(Decode(code.GetILReader(out var byteCodeLength), new Code(byteCodeLength), 0));
+        public static Code GetInstructions(this MethodBase code)
+        {
+            var il = code.GetILReader(out var byteCodeLength);
+            var bc = Decode(il, new Code(byteCodeLength), 0);
+            bc.SetExceptionHandlers(il.ExceptionHandlers);
+            return CFA(bc);
+        }
 
         /// <summary>
         /// Decompile a method using the specified decompiler.
@@ -260,6 +265,24 @@ namespace CIL
 
             // Pass 2: DFS over the control flow graph with 3-color marking
             VisitBlock(code, 0);
+
+            // Pass 3: visit exception handler entry points not reachable from normal flow
+            if (code.ExceptionHandlers != null)
+            {
+                foreach (var handler in code.ExceptionHandlers)
+                {
+                    var handlerIdx = code.GetIndex(handler.HandlerStart);
+                    if (code[handlerIdx].colour == DfsColour.White)
+                        VisitBlock(code, handlerIdx);
+                    if (handler.IsFilter)
+                    {
+                        var filterIdx = code.GetIndex(handler.FilterStart);
+                        if (code[filterIdx].colour == DfsColour.White)
+                            VisitBlock(code, filterIdx);
+                    }
+                }
+            }
+
             return code;
         }
 

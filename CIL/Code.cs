@@ -17,12 +17,14 @@ namespace CIL
         Instruction[] instructions;
         ushort count;
         ushort[] labelIndex;
+        ExceptionRegion[] handlers;
 
         internal Code(int byteCodeLength)
         {
             count = 0;
             instructions = new Instruction[byteCodeLength];
             labelIndex = new ushort[byteCodeLength];
+            handlers = Array.Empty<ExceptionRegion>();
         }
 
         /// <summary>
@@ -58,6 +60,32 @@ namespace CIL
         /// <returns>The instruction's index.</returns>
         public int GetIndex(IL.Label label) =>
             labelIndex[label.Offset];
+
+        /// <summary>
+        /// The exception handling regions for this method.
+        /// </summary>
+        public ExceptionRegion[] ExceptionHandlers => handlers;
+
+        /// <summary>
+        /// Sets the exception handling regions and marks boundary instructions.
+        /// </summary>
+        internal void SetExceptionHandlers(ExceptionRegion[] regions)
+        {
+            this.handlers = regions;
+            for (int i = 0; i < regions.Length; i++)
+            {
+                ref var r = ref regions[i];
+                this[r.TryStart].flags |= InstructionFlags.TryStart | InstructionFlags.Leader;
+                this[r.HandlerStart].flags |= InstructionFlags.HandlerStart | InstructionFlags.Leader;
+                if (r.IsFilter)
+                    this[r.FilterStart].flags |= InstructionFlags.FilterStart | InstructionFlags.Leader;
+                // Mark exclusive end boundaries as leaders if within the bytecode
+                if (r.TryEnd.Offset < labelIndex.Length)
+                    this[r.TryEnd].flags |= InstructionFlags.Leader;
+                if (r.HandlerEnd.Offset < labelIndex.Length)
+                    this[r.HandlerEnd].flags |= InstructionFlags.Leader;
+            }
+        }
 
         /// <inheritdoc/>
         public IEnumerator<Instruction> GetEnumerator()

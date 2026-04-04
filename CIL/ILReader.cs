@@ -36,9 +36,28 @@ namespace CIL
             this.Locals = body?.LocalVariables ?? new List<LocalVariableInfo>(0);
             this.code = body?.GetILAsByteArray() ?? new byte[0];
             byteCodeLength = this.bound = code.Length;
-            //method.GetMethodBody().ExceptionHandlingClauses[0].Flags == ExceptionHandlingClauseOptions
-            // enum ScopeType { Normal, Try, Catch, Finally }
-            //Dictionary<int, ScopeType> ??
+            var clauses = body?.ExceptionHandlingClauses;
+            if (clauses != null && clauses.Count > 0)
+            {
+                this.ExceptionHandlers = new ExceptionRegion[clauses.Count];
+                for (int j = 0; j < clauses.Count; j++)
+                {
+                    var c = clauses[j];
+                    this.ExceptionHandlers[j] = new ExceptionRegion(
+                        c.Flags,
+                        new IL.Label(c.TryOffset),
+                        new IL.Label(c.TryOffset + c.TryLength),
+                        new IL.Label(c.HandlerOffset),
+                        new IL.Label(c.HandlerOffset + c.HandlerLength),
+                        c.Flags == ExceptionHandlingClauseOptions.Filter ? new IL.Label(c.FilterOffset) : default,
+                        c.Flags == ExceptionHandlingClauseOptions.Clause ? c.CatchType : null
+                    );
+                }
+            }
+            else
+            {
+                this.ExceptionHandlers = Array.Empty<ExceptionRegion>();
+            }
         }
 
         /// <summary>
@@ -55,6 +74,11 @@ namespace CIL
         /// The method's arguments.
         /// </summary>
         public IList<ParameterInfo> Args { get; private set; }
+
+        /// <summary>
+        /// The method's exception handling regions (try/catch/finally/fault/filter).
+        /// </summary>
+        public ExceptionRegion[] ExceptionHandlers { get; private set; }
 
         /// <summary>
         /// Generate a label marking a position in the instruction stream.
