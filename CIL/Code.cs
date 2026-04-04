@@ -49,8 +49,7 @@ namespace CIL
         /// </summary>
         /// <param name="index">The index of the instruction to find.</param>
         /// <returns>The instruction's label.</returns>
-        public IL.Label GetLabel(int index) =>
-            new IL.Label(Array.IndexOf(labelIndex, (ushort)index));
+        public IL.Label GetLabel(int index) => instructions[index].label;
 
         /// <summary>
         /// Gets the corresponding instruction index for the given label.
@@ -85,23 +84,21 @@ namespace CIL
             return size;
         }
 
-        /// <summary>
-        /// Add a loop
-        /// </summary>
-        /// <param name="offset">The offset/label of the branch instruction.</param>
-        /// <param name="jumpTarget">The target of the branch instruction.</param>
-        internal void AddLoop(int offset, IL.Label jumpTarget) =>
-            this[jumpTarget].Add(ControlFlow.Loop, new IL.Label(offset));
+        internal void SetFlag(int index, InstructionFlags flag) =>
+            instructions[index].flags |= flag;
 
-        internal void AddBreak(int offset, IL.Label jumpTarget) =>
-            this[jumpTarget].Add(ControlFlow.Break, new IL.Label(offset));
+        internal void AddLoop(IL.Label jumpTarget) =>
+            this[jumpTarget].flags |= InstructionFlags.LoopHeader;
+
+        internal void AddBreak(IL.Label jumpTarget) =>
+            this[jumpTarget].flags |= InstructionFlags.BreakTarget;
 
         /// <inheritdoc/>
         public override string ToString()
         {
             var buf = new StringBuilder();
-            for (int i = 0, label = 0; i < count; label += instructions[i].Size, ++i)
-                buf.Append(new IL.Label(label)).Append(": ").Append(instructions[i]).AppendLine();
+            for (int i = 0; i < count; ++i)
+                buf.Append(instructions[i].label).Append(": ").Append(instructions[i]).AppendLine();
             return buf.ToString();
         }
     }

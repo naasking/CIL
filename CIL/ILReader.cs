@@ -129,7 +129,7 @@ namespace CIL
                     i += 1;
                     break;
             }
-            current = new Instruction(this, op, arg);
+            current = new Instruction(this, op, arg, new IL.Label(label));
             return true;
         }
 

@@ -1,11 +1,7 @@
 ﻿using System;
 using System.Reflection;
-using System.Collections.Generic;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using System.Linq.Expressions;
-using System.Reflection.Emit;
 using Xunit;
 using CIL.Expressions;
 
@@ -180,15 +176,14 @@ namespace CIL.Tests
         }
 
         [Fact]
-        static void TestLoop()
+        public static void TestLoop()
         {
             var il = new Func<int, int>(LoopMethod).Method.GetInstructions();
-            Assert.NotNull(il[2].CF);
-            Assert.Single(il[2].CF);
-            var (cf, source) = il[2].CF.First();
-            var br = il[source];
-            Assert.True(br.OpCode.IsBranch());
-            Assert.Equal(il.GetLabel(2), br.Operand.Label);
+            Assert.Contains(il, z => z.IsLoopHeader);
+            Assert.Contains(il, z => z.IsLeader);
+            var idx = il.Select((x, i) => (i, x)).First(z => z.x.IsLoopHeader).i;
+            Assert.True(il[idx].IsLoopHeader);
+            Assert.True(il[idx].IsLeader);
             Assert.Equal("IL_0000: nop ", il.ToString().Split('\r', '\n').First());
         }
 

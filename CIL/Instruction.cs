@@ -193,7 +193,36 @@ namespace CIL
         }
     }
 
-    public enum ControlFlow { Break, Loop }
+    /// <summary>
+    /// For marking instructions during depth-first search in control flow analysis.
+    /// </summary>
+    enum DfsColour : byte
+    {
+        /// <summary>
+        /// Unvisited.
+        /// </summary>
+        White = 0,
+        /// <summary>
+        /// On stack.
+        /// </summary>
+        Grey = 1,
+        /// <summary>
+        /// Done
+        /// </summary>
+        Black = 2,
+    }
+
+    /// <summary>
+    /// Flags for control flow analysis of instructions.
+    /// </summary>
+    [Flags]
+    public enum InstructionFlags : byte
+    {
+        None = 0,
+        Leader = 1,
+        LoopHeader = 2,
+        BreakTarget = 4,
+    }
 
     /// <summary>
     /// A CIL instruction.
@@ -211,11 +240,36 @@ namespace CIL
         /// <summary>
         /// The ILReader that created this instruction.
         /// </summary>
+        /// <remarks>
+        /// This is a little hacky, but it allows instructions to resolve their operands
+        /// without needing to store the operand metadata in the instruction itself, which would
+        /// require a union of int and other operand types and make the struct much larger. Since
+        /// instructions are immutable, we can just store a reference to the reader that created
+        /// them and call reader.Resolve*(Operand.MetadataToken) to get the operand value when
+        /// needed.
+        /// </remarks>
         readonly ILReader reader;
+
+        //--- flags, colour and label should all fit in an Int32 ---//
+
         /// <summary>
-        /// Instructions that branch backwards this instruction.
+        /// CFA flags for this instruction (basic block leader, loop header, break target).
         /// </summary>
-        internal HashSet<(ControlFlow, IL.Label)> cf;
+        /// <remarks>
+        /// Set via methods in Code that directly index the instruction array,
+        /// ensuring the struct is modified in-place rather than copied.
+        /// </remarks>
+        internal InstructionFlags flags;
+
+        /// <summary>
+        /// Colour used to mark instructions during depth-first search in control flow analysis.
+        /// </summary>
+        internal DfsColour colour;
+
+        /// <summary>
+        /// The label for this instruction corresponding to its offset in the bytecode.
+        /// </summary>
+        internal IL.Label label;
 
         /// <summary>
         /// Construct an instruction.
@@ -224,38 +278,39 @@ namespace CIL
         /// <param name="op">The instruction opcode.</param>
         /// <param name="arg">The instruction operand.</param>
         /// <param name="label">The instruction's address in the bytecode.</param>
-        public Instruction(ILReader reader, OpCode op, Operand arg)
+        public Instruction(ILReader reader, OpCode op, Operand arg, IL.Label label)
         {
             this.reader = reader;
             this.OpCode = op;
             this.Operand = arg;
-            this.cf = null; //Lifo<(ControlFlow, IL.Label)>.Empty;
-        }
-
-        /// <summary>
-        /// Construct an instruction.
-        /// </summary>
-        /// <param name="reader">The reader that created this instruction.</param>
-        /// <param name="op">The instruction opcode.</param>
-        /// <param name="label">The instruction's address in the bytecode.</param>
-        public Instruction(ILReader reader, OpCode op)
-            : this(reader, op, default(Operand))
-        {
+            this.flags = InstructionFlags.None;
+            this.colour = DfsColour.White;
+            this.label = label;
         }
 
         internal bool IsInitialized => reader != null;
 
         /// <summary>
-        /// Tag the instruction with control flow info.
+        /// Whether this instruction is a basic block leader.
         /// </summary>
-        /// <param name="exit">The label that jumps to this point.</param>
-        internal void Add(ControlFlow cf, IL.Label exit) =>
-            (this.cf ?? (this.cf = new HashSet<(ControlFlow, IL.Label)>())).Add((cf, exit));
+        public bool IsLeader => (flags & InstructionFlags.Leader) != 0;
 
         /// <summary>
-        /// The series of labels that jump to this instruction.
+        /// Whether this instruction is a loop header (target of a back-edge).
         /// </summary>
-        public IEnumerable<(ControlFlow, IL.Label)> CF => cf;
+        public bool IsLoopHeader => (flags & InstructionFlags.LoopHeader) != 0;
+
+        /// <summary>
+        /// Whether this instruction is a break target (exit from a loop).
+        /// </summary>
+        public bool IsBreakTarget => (flags & InstructionFlags.BreakTarget) != 0;
+
+        /// <summary>
+        /// Mark the colour.
+        /// </summary>
+        /// <param name="colour"></param>
+        internal void Mark(DfsColour colour) =>
+            this.colour = colour;
 
         /// <summary>
         /// The instruction's size.
@@ -303,6 +358,15 @@ namespace CIL
         }
 
         /// <summary>
+        /// Convert to a new opcode and operand.
+        /// </summary>
+        /// <param name="op"></param>
+        /// <param name="operand"></param>
+        /// <returns></returns>
+        Instruction With(OpCode op, Operand operand) =>
+            new Instruction(reader, op, operand, label);
+
+        /// <summary>
         /// Normalizes all the special inline instructions into a
         /// single instruction type with an argument.
         /// </summary>
@@ -313,60 +377,60 @@ namespace CIL
         /// </remarks>
         public Instruction Simplify()
         {
-            //FIXME: a future simplification might also expand redundant instructions on smaller
+            //a future simplification might also expand redundant instructions on smaller
             //types to the comparable type with the largest size, ie. _R4=>_R8, _I/_I1=>_I8, etc.
-            //case OpType.Ldind_i1: return new Instruction(reader, OpCodes.Ldind_I8, Operand);
-            //case OpType.Ldind_u1: return new Instruction(reader, OpCodes.Ldind_U8, Operand);
+            //case OpType.Ldind_i1: return With(OpCodes.Ldind_I8, Operand);
+            //case OpType.Ldind_u1: return With(OpCodes.Ldind_U8, Operand);
             //...
-            //case OpType.Stelem_i1: return new Instruction(reader, OpCodes.Stelem_I8, Operand);
-            //case OpType.Stelem_i2: return new Instruction(reader, OpCodes.Stelem_I8, Operand);
-            //case OpType.Stelem_i4: return new Instruction(reader, OpCodes.Stelem_I8, Operand);
+            //case OpType.Stelem_i1: return With(OpCodes.Stelem_I8, Operand);
+            //case OpType.Stelem_i2: return With(OpCodes.Stelem_I8, Operand);
+            //case OpType.Stelem_i4: return With(OpCodes.Stelem_I8, Operand);
             //...
             switch (OpCode.Type())
             {
-                case OpType.Starg_s: return new Instruction(reader, OpCodes.Starg, new Operand((short)Operand.Int8));
-                case OpType.Stloc_s: return new Instruction(reader, OpCodes.Stloc, new Operand((short)Operand.Int8));
-                case OpType.Stloc_0: return new Instruction(reader, OpCodes.Stloc, 0);
-                case OpType.Stloc_1: return new Instruction(reader, OpCodes.Stloc, 1);
-                case OpType.Stloc_2: return new Instruction(reader, OpCodes.Stloc, 2);
-                case OpType.Stloc_3: return new Instruction(reader, OpCodes.Stloc, 3);
-                case OpType.Ldloca_s: return new Instruction(reader, OpCodes.Ldloca, new Operand((short)Operand.Int8));
-                case OpType.Ldloc_s: return new Instruction(reader, OpCodes.Ldloc, new Operand((short)Operand.Int8));
-                case OpType.Ldloc_0: return new Instruction(reader, OpCodes.Ldloc, 0);
-                case OpType.Ldloc_1: return new Instruction(reader, OpCodes.Ldloc, 1);
-                case OpType.Ldloc_2: return new Instruction(reader, OpCodes.Ldloc, 2);
-                case OpType.Ldloc_3: return new Instruction(reader, OpCodes.Ldloc, 3);
-                case OpType.Ldarga_s: return new Instruction(reader, OpCodes.Ldarga, new Operand((short)Operand.Int8));
-                case OpType.Ldarg_s: return new Instruction(reader, OpCodes.Ldarg, new Operand((short)Operand.Int8));
-                case OpType.Ldarg_0: return new Instruction(reader, OpCodes.Ldarg, 0);
-                case OpType.Ldarg_1: return new Instruction(reader, OpCodes.Ldarg, 1);
-                case OpType.Ldarg_2: return new Instruction(reader, OpCodes.Ldarg, 2);
-                case OpType.Ldarg_3: return new Instruction(reader, OpCodes.Ldarg, 3);
-                case OpType.Ldc_i4_s: return new Instruction(reader, OpCodes.Ldc_I4, new Operand((short)Operand.Int8));
-                case OpType.Ldc_i4_m1: return new Instruction(reader, OpCodes.Ldc_I4, -1);
-                case OpType.Ldc_i4_0: return new Instruction(reader, OpCodes.Ldc_I4, 0);
-                case OpType.Ldc_i4_1: return new Instruction(reader, OpCodes.Ldc_I4, 1);
-                case OpType.Ldc_i4_2: return new Instruction(reader, OpCodes.Ldc_I4, 2);
-                case OpType.Ldc_i4_3: return new Instruction(reader, OpCodes.Ldc_I4, 3);
-                case OpType.Ldc_i4_4: return new Instruction(reader, OpCodes.Ldc_I4, 4);
-                case OpType.Ldc_i4_5: return new Instruction(reader, OpCodes.Ldc_I4, 5);
-                case OpType.Ldc_i4_6: return new Instruction(reader, OpCodes.Ldc_I4, 6);
-                case OpType.Ldc_i4_7: return new Instruction(reader, OpCodes.Ldc_I4, 7);
-                case OpType.Ldc_i4_8: return new Instruction(reader, OpCodes.Ldc_I4, 8);
-                case OpType.Leave_s: return new Instruction(reader, OpCodes.Leave, Operand);
-                case OpType.Brfalse_s: return new Instruction(reader, OpCodes.Brfalse, Operand);
-                case OpType.Brtrue_s: return new Instruction(reader, OpCodes.Brtrue, Operand);
-                case OpType.Br_s: return new Instruction(reader, OpCodes.Br, Operand);
-                case OpType.Beq_s: return new Instruction(reader, OpCodes.Beq, Operand);
-                case OpType.Bge_s: return new Instruction(reader, OpCodes.Bge, Operand);
-                case OpType.Bge_un_s: return new Instruction(reader, OpCodes.Bge_Un, Operand);
-                case OpType.Bgt_s: return new Instruction(reader, OpCodes.Bgt, Operand);
-                case OpType.Bgt_un_s: return new Instruction(reader, OpCodes.Bgt_Un, Operand);
-                case OpType.Ble_s: return new Instruction(reader, OpCodes.Ble, Operand);
-                case OpType.Ble_un_s: return new Instruction(reader, OpCodes.Ble_Un, Operand);
-                case OpType.Blt_s: return new Instruction(reader, OpCodes.Blt, Operand);
-                case OpType.Blt_un_s: return new Instruction(reader, OpCodes.Blt_Un, Operand);
-                case OpType.Bne_un_s: return new Instruction(reader, OpCodes.Bne_Un, Operand);
+                case OpType.Starg_s: return With(OpCodes.Starg, new Operand((short)Operand.Int8));
+                case OpType.Stloc_s: return With(OpCodes.Stloc, new Operand((short)Operand.Int8));
+                case OpType.Stloc_0: return With(OpCodes.Stloc, 0);
+                case OpType.Stloc_1: return With(OpCodes.Stloc, 1);
+                case OpType.Stloc_2: return With(OpCodes.Stloc, 2);
+                case OpType.Stloc_3: return With(OpCodes.Stloc, 3);
+                case OpType.Ldloca_s: return With(OpCodes.Ldloca, new Operand((short)Operand.Int8));
+                case OpType.Ldloc_s: return With(OpCodes.Ldloc, new Operand((short)Operand.Int8));
+                case OpType.Ldloc_0: return With(OpCodes.Ldloc, 0);
+                case OpType.Ldloc_1: return With(OpCodes.Ldloc, 1);
+                case OpType.Ldloc_2: return With(OpCodes.Ldloc, 2);
+                case OpType.Ldloc_3: return With(OpCodes.Ldloc, 3);
+                case OpType.Ldarga_s: return With(OpCodes.Ldarga, new Operand((short)Operand.Int8));
+                case OpType.Ldarg_s: return With(OpCodes.Ldarg, new Operand((short)Operand.Int8));
+                case OpType.Ldarg_0: return With(OpCodes.Ldarg, 0);
+                case OpType.Ldarg_1: return With(OpCodes.Ldarg, 1);
+                case OpType.Ldarg_2: return With(OpCodes.Ldarg, 2);
+                case OpType.Ldarg_3: return With(OpCodes.Ldarg, 3);
+                case OpType.Ldc_i4_s: return With(OpCodes.Ldc_I4, new Operand((short)Operand.Int8));
+                case OpType.Ldc_i4_m1: return With(OpCodes.Ldc_I4, -1);
+                case OpType.Ldc_i4_0: return With(OpCodes.Ldc_I4, 0);
+                case OpType.Ldc_i4_1: return With(OpCodes.Ldc_I4, 1);
+                case OpType.Ldc_i4_2: return With(OpCodes.Ldc_I4, 2);
+                case OpType.Ldc_i4_3: return With(OpCodes.Ldc_I4, 3);
+                case OpType.Ldc_i4_4: return With(OpCodes.Ldc_I4, 4);
+                case OpType.Ldc_i4_5: return With(OpCodes.Ldc_I4, 5);
+                case OpType.Ldc_i4_6: return With(OpCodes.Ldc_I4, 6);
+                case OpType.Ldc_i4_7: return With(OpCodes.Ldc_I4, 7);
+                case OpType.Ldc_i4_8: return With(OpCodes.Ldc_I4, 8);
+                case OpType.Leave_s: return With(OpCodes.Leave, Operand);
+                case OpType.Brfalse_s: return With(OpCodes.Brfalse, Operand);
+                case OpType.Brtrue_s: return With(OpCodes.Brtrue, Operand);
+                case OpType.Br_s: return With(OpCodes.Br, Operand);
+                case OpType.Beq_s: return With(OpCodes.Beq, Operand);
+                case OpType.Bge_s: return With(OpCodes.Bge, Operand);
+                case OpType.Bge_un_s: return With(OpCodes.Bge_Un, Operand);
+                case OpType.Bgt_s: return With(OpCodes.Bgt, Operand);
+                case OpType.Bgt_un_s: return With(OpCodes.Bgt_Un, Operand);
+                case OpType.Ble_s: return With(OpCodes.Ble, Operand);
+                case OpType.Ble_un_s: return With(OpCodes.Ble_Un, Operand);
+                case OpType.Blt_s: return With(OpCodes.Blt, Operand);
+                case OpType.Blt_un_s: return With(OpCodes.Blt_Un, Operand);
+                case OpType.Bne_un_s: return With(OpCodes.Bne_Un, Operand);
                 default: return this;
             }
         }
@@ -466,10 +530,8 @@ namespace CIL
         /// <inheritdoc/>
         public override string ToString()
         {
-            var backJumps = cf == null
-                ? ""
-                : cf.Aggregate(new StringBuilder("<- {"), (o, x) => o.Append(x).Append(",")).Append("}").ToString();
-            return OpCode.Name + " " + Resolve() + backJumps;
+            var suffix = IsLoopHeader ? " <- Loop" : IsBreakTarget ? " <- Break" : "";
+            return OpCode.Name + " " + Resolve() + suffix;
         }
     }
 }

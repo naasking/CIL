@@ -49,7 +49,7 @@ namespace CIL
             {
                 if (offset < 0)
                     throw new ArgumentException("Invalid instruction offset.");
-                this.Offset = offset;
+                this.offset = (ushort)offset;
             }
             /// <inheritdoc/>
             public override bool Equals(object obj)
@@ -76,10 +76,20 @@ namespace CIL
             {
                 return "IL_" + Offset.ToString("X4");
             }
+
+            /// <summary>
+            /// Max CIL method size is 65535 bytes, so ushort is sufficient to store instruction offsets.
+            /// </summary>
+            ushort offset;
+
             /// <summary>
             /// The offset of the instruction in the bytecode stream.
             /// </summary>
-            public int Offset { get; private set; }
+            public int Offset
+            {
+                get => offset;
+                set => offset = (ushort)value;
+            }
 
             /// <inheritdoc/>
             public static int operator -(Label left, Label right)
@@ -183,9 +193,7 @@ namespace CIL
         /// <param name="code">The method to analyze.</param>
         /// <returns>A stream of instructions.</returns>
         public static Code GetInstructions(this MethodBase code) =>
-            CFA(Decode(code.GetILReader(out var byteCodeLength), new Code(byteCodeLength), 0), 0, null, null);
-            //CFA(Decode(code.GetILReader(out var byteCodeLength), new Code(byteCodeLength), 0), 0, new HashSet<Label>());
-            //Decode(code.GetILReader(out var byteCodeLength), new Code(byteCodeLength), 0);
+            CFA(Decode(code.GetILReader(out var byteCodeLength), new Code(byteCodeLength), 0));
 
         /// <summary>
         /// Decompile a method using the specified decompiler.
@@ -209,9 +217,6 @@ namespace CIL
         /// First-pass over the instruction stream decodes all instructions and
         /// tags all loops. A second pass can translate decoded instructions into
         /// high-level expressions.
-        /// 
-        /// Might be able to merge two passes into a single-pass decode+expression
-        /// by tracking a Dictionary{IL.Label, T}.
         /// </summary>
         static Code Decode(ILReader il, Code bc, int offset)
         {
@@ -223,135 +228,121 @@ namespace CIL
             return bc;
         }
 
-        static Code CFA(Code code, int start, HashSet<Label> trace)
+        static Code CFA(Code code)
         {
-            for (int i = start; i < code.Count; ++i)
+            if (code.Count == 0) return code;
+
+            // Pass 1: identify basic block leaders (flags stored directly on instructions)
+            code.SetFlag(0, InstructionFlags.Leader);
+            for (int i = 0; i < code.Count; ++i)
             {
                 ref var instr = ref code[i];
                 switch (instr.OpCode.FlowControl)
                 {
                     case FlowControl.Branch:
-                        //FIXME: could have a conditional branch that jumps inside the loop, then
-                        //an unconditional branch outside the loop. So we need to track these too,
-                        //and possibly some kind of "loop context".
-                        if (trace.Add(code.GetLabel(i)))
-                            i = code.GetIndex(instr.Operand.Label);
+                        code.SetFlag(code.GetIndex(instr.Operand.Label), InstructionFlags.Leader);
+                        if (i + 1 < code.Count) code.SetFlag(i + 1, InstructionFlags.Leader);
+                        break;
+                    case FlowControl.Cond_Branch:
+                        if (instr.OpCode.OperandType == OperandType.InlineSwitch)
+                            foreach (var kv in instr.ResolveBranches())
+                                code.SetFlag(code.GetIndex(kv.Value), InstructionFlags.Leader);
                         else
-                            return code;
+                            code.SetFlag(code.GetIndex(instr.Operand.Label), InstructionFlags.Leader);
+                        if (i + 1 < code.Count) code.SetFlag(i + 1, InstructionFlags.Leader);
                         break;
                     case FlowControl.Return:
                     case FlowControl.Throw:
-                        return code;
-                    case FlowControl.Cond_Branch:
-                        // follow both paths of a conditional branch, so take the branch
-                        // in a recursive call, and then process the path that skips the branch
-                        // after returning
-                        var target = instr.Operand.Label;
-                        var label = code.GetLabel(i);
-                        //if (trace.Add(target))
-                        if (trace.Add(label))
-                        {
-                            CFA(code, code.GetIndex(target), new HashSet<Label>(trace));
-                        }
-                        else
-                        {
-                            // tag spot the loop and then identify any branches in the trace history
-                            // that exit the loop
-                            //code.AddLoop(code.GetLabel(i).Offset, target);
-                            code.AddLoop(label.Offset, target);
-                            var i_t = code.GetIndex(target);
-                            var lowest = Math.Min(i, i_t);
-                            var highest = Math.Max(i, i_t);
-                            foreach (var x in trace.Select(x => code.GetIndex(code[x].Operand.Label)))
-                                if (x < lowest || x > highest)
-                                    code.AddBreak(i, code.GetLabel(x));
-                            return code;
-                        }
+                        if (i + 1 < code.Count) code.SetFlag(i + 1, InstructionFlags.Leader);
                         break;
                 }
             }
+
+            // Pass 2: DFS over the control flow graph with 3-color marking
+            VisitBlock(code, 0);
             return code;
         }
 
-        static Code CFA(Code code, int start, Label? loopStart, Label? loopEnd)
+        static int BlockEnd(Code code, int start)
         {
-            for (int i = start; i < code.Count; ++i)
-            {
-                ref var instr = ref code[i];
-                switch (instr.OpCode.FlowControl)
-                {
-                    case FlowControl.Branch:
-                        //FIXME: could have a conditional branch that jumps inside the loop, then
-                        //an unconditional branch outside the loop. So we need to track these too,
-                        //and possibly some kind of "loop context".
-                        if (loopStart > instr.Operand.Label && instr.Operand.Label > loopEnd)
-                            code.AddBreak(i, instr.Operand.Label);
-                        else if (loopStart == null)
-                            loopStart = code.GetLabel(i);
-                        //else if (loopEnd == nu)
-                        i = code.GetIndex(instr.Operand.Label);
-                        break;
-                    case FlowControl.Return:
-                    case FlowControl.Throw:
-                        return code;
-                    case FlowControl.Cond_Branch:
-                        // follow both paths of a conditional branch, so take the branch
-                        // in a recursive call, and then process the path that skips the branch
-                        // after returning
-                        var target = instr.Operand.Label;
-                        var label = code.GetLabel(i);
-                        if (loopStart == null)
-                        {
-                            loopStart = label;
-                        }
-                        if (loopEnd == null)
-                        {
-                            loopEnd = label;
-                        }
-                        if (label <= loopStart)
-                        {
-                            CFA(code, code.GetIndex(target), label, loopEnd);
-                        }
-                        else if (label >= loopEnd)
-                        {
-                            CFA(code, code.GetIndex(target), loopStart, label);
-                        }
-                        else
-                        {
-                            // tag spot the loop and then identify any branches in the trace history
-                            // that exit the loop
-                            //code.AddLoop(code.GetLabel(i).Offset, target);
-                            code.AddLoop(label.Offset, target);
-                            return code;
-                        }
-                        break;
-                }
-            }
-            return code;
+            int end = start;
+            for (int j = start + 1; j < code.Count && !code[j].IsLeader; ++j)
+                end = j;
+            return end;
         }
 
-        //static Code CFA(Code code, int i, ref Instruction instr, BranchCond cond, HashSet<(Label, BranchCond)> trace)
-        //{
-        //    // if the jump target is not already in the trace history, then follow the branch
-        //    // otherwise tag it as a loop and return
-        //    var target = instr.Operand.Label;
-        //    if (trace.Add((target, cond)))
-        //    {
-        //        return CFA(code, code.GetIndex(target), new HashSet<(Label, BranchCond)>(trace));
-        //    }
-        //    else
-        //    {
-        //        code.AddLoop(i, target);
-        //        //// check trace history to identify branches that exit the loop as breaks
-        //        //var i_t = code.GetIndex(target);
-        //        //var lowest = Math.Min(i, i_t);
-        //        //var highest = Math.Max(i, i_t);
-        //        //foreach (var x in trace)
-        //        //    if (x < lowest || x > highest)
-        //        //        code.AddBreak(i, code.GetLabel(x));
-        //        return code;
-        //    }
-        //}
+        static void VisitBlock(Code code, int start)
+        {
+            code[start].Mark(DfsColour.Grey);
+            var end = BlockEnd(code, start);
+            ref var last = ref code[end];
+
+            switch (last.OpCode.FlowControl)
+            {
+                case FlowControl.Branch:
+                    VisitEdge(code, end, last.Operand.Label);
+                    break;
+                case FlowControl.Cond_Branch:
+                    if (last.OpCode.OperandType == OperandType.InlineSwitch)
+                        foreach (var kv in last.ResolveBranches())
+                            VisitEdge(code, end, kv.Value);
+                    else
+                        VisitEdge(code, end, last.Operand.Label);
+                    if (end + 1 < code.Count)
+                        VisitEdge(code, end, code.GetLabel(end + 1));
+                    break;
+                case FlowControl.Return:
+                case FlowControl.Throw:
+                    break;
+                default:
+                    if (end + 1 < code.Count)
+                        VisitEdge(code, end, code.GetLabel(end + 1));
+                    break;
+            }
+            code[start].Mark(DfsColour.Black);
+        }
+
+        static void VisitEdge(Code code, int sourceIdx, Label target)
+        {
+            var targetIdx = code.GetIndex(target);
+            switch (code[targetIdx].colour)
+            {
+                case DfsColour.Grey: // Grey -> back-edge -> loop
+                    code.AddLoop(target);
+                    DetectBreaks(code, targetIdx, sourceIdx);
+                    break;
+                case DfsColour.White: // White -> tree edge -> recurse
+                    VisitBlock(code, targetIdx);
+                    break;
+                // Black -> cross/forward edge -> already explored, skip
+            }
+        }
+
+        static void DetectBreaks(Code code, int loopStart, int loopEnd)
+        {
+            for (int k = loopStart; k <= loopEnd; ++k)
+            {
+                ref var instr = ref code[k];
+                if (instr.OpCode.FlowControl != FlowControl.Branch &&
+                    instr.OpCode.FlowControl != FlowControl.Cond_Branch)
+                    continue;
+                if (instr.OpCode.OperandType == OperandType.InlineSwitch)
+                {
+                    foreach (var kv in instr.ResolveBranches())
+                    {
+                        var exitIdx = code.GetIndex(kv.Value);
+                        if (exitIdx < loopStart || exitIdx > loopEnd)
+                            code.AddBreak(kv.Value);
+                    }
+                }
+                else
+                {
+                    var exitIdx = code.GetIndex(instr.Operand.Label);
+                    if (exitIdx < loopStart || exitIdx > loopEnd)
+                        code.AddBreak(instr.Operand.Label);
+                }
+            }
+        }
 
         static void Process<T>(ILReader il, IExpression<T> exp, Stack<T> eval, Dictionary<Label, T> env, T[] args, T[] locals)
         {
