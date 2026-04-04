@@ -183,13 +183,36 @@ namespace CIL.Tests
         static void TestLoop()
         {
             var il = new Func<int, int>(LoopMethod).Method.GetInstructions();
-            Assert.NotNull(il[2].Loops);
-            Assert.Single(il[2].Loops);
-            var source = il[2].Loops.First();
+            Assert.NotNull(il[2].CF);
+            Assert.Single(il[2].CF);
+            var (cf, source) = il[2].CF.First();
             var br = il[source];
             Assert.True(br.OpCode.IsBranch());
             Assert.Equal(il.GetLabel(2), br.Operand.Label);
             Assert.Equal("IL_0000: nop ", il.ToString().Split('\r', '\n').First());
+        }
+
+        static int GotoMethod(int i)
+        {
+            goto BEGIN;
+
+        LT0:
+            return i * 2;
+
+        GTE0:
+            return i / 2;
+
+        BEGIN:
+            if (i < 0)
+                goto LT0;
+            else
+                goto GTE0;
+        }
+
+        [Fact]
+        static void TestGoto()
+        {
+            var il = new Func<int, int>(GotoMethod).Method.GetInstructions();
         }
     }
 }

@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFrameworks>netstandard2.0;net45</TargetFrameworks>
+    <TargetFrameworks>net8.0;net48</TargetFrameworks>
     <Authors>Sandro Magi</Authors>
     <Company />
     <Product>CIL.NET</Product>
@@ -21,6 +21,7 @@
 
   <ItemGroup>
     <PackageReference Include="System.Reflection" Version="4.3.0" />
+    <PackageReference Include="System.ValueTuple" Version="4.6.2" />
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />

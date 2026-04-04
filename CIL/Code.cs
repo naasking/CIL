@@ -91,7 +91,10 @@ namespace CIL
         /// <param name="offset">The offset/label of the branch instruction.</param>
         /// <param name="jumpTarget">The target of the branch instruction.</param>
         internal void AddLoop(int offset, IL.Label jumpTarget) =>
-            this[jumpTarget].AddLoop(new IL.Label(offset));
+            this[jumpTarget].Add(ControlFlow.Loop, new IL.Label(offset));
+
+        internal void AddBreak(int offset, IL.Label jumpTarget) =>
+            this[jumpTarget].Add(ControlFlow.Break, new IL.Label(offset));
 
         /// <inheritdoc/>
         public override string ToString()

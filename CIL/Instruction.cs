@@ -193,6 +193,8 @@ namespace CIL
         }
     }
 
+    public enum ControlFlow { Break, Loop }
+
     /// <summary>
     /// A CIL instruction.
     /// </summary>
@@ -213,8 +215,8 @@ namespace CIL
         /// <summary>
         /// Instructions that branch backwards this instruction.
         /// </summary>
-        internal Lifo<IL.Label> loops;
-        
+        internal HashSet<(ControlFlow, IL.Label)> cf;
+
         /// <summary>
         /// Construct an instruction.
         /// </summary>
@@ -227,7 +229,7 @@ namespace CIL
             this.reader = reader;
             this.OpCode = op;
             this.Operand = arg;
-            this.loops = Lifo<IL.Label>.Empty;
+            this.cf = null; //Lifo<(ControlFlow, IL.Label)>.Empty;
         }
 
         /// <summary>
@@ -241,18 +243,19 @@ namespace CIL
         {
         }
 
+        internal bool IsInitialized => reader != null;
+
         /// <summary>
-        /// Tag the instruction with a loop.
+        /// Tag the instruction with control flow info.
         /// </summary>
         /// <param name="exit">The label that jumps to this point.</param>
-        /// <returns>A new instruction with the loop added.</returns>
-        internal void AddLoop(IL.Label exit) =>
-            loops = loops.Push(exit);
+        internal void Add(ControlFlow cf, IL.Label exit) =>
+            (this.cf ?? (this.cf = new HashSet<(ControlFlow, IL.Label)>())).Add((cf, exit));
 
         /// <summary>
         /// The series of labels that jump to this instruction.
         /// </summary>
-        public IEnumerable<IL.Label> Loops => loops;
+        public IEnumerable<(ControlFlow, IL.Label)> CF => cf;
 
         /// <summary>
         /// The instruction's size.
@@ -268,7 +271,7 @@ namespace CIL
         // int in the instruction itself.
         //int operandMetadata;
         //public Operand Operand2 => reader.ResolveInt32(operandMetadata);
-        
+
         /// <summary>
         /// Resolve the instruction's operand value.
         /// </summary>
@@ -350,21 +353,21 @@ namespace CIL
                 case OpType.Ldc_i4_6: return new Instruction(reader, OpCodes.Ldc_I4, 6);
                 case OpType.Ldc_i4_7: return new Instruction(reader, OpCodes.Ldc_I4, 7);
                 case OpType.Ldc_i4_8: return new Instruction(reader, OpCodes.Ldc_I4, 8);
-                case OpType.Leave_s:  return new Instruction(reader, OpCodes.Leave, Operand);
-                case OpType.Brfalse_s:return new Instruction(reader, OpCodes.Brfalse, Operand);
+                case OpType.Leave_s: return new Instruction(reader, OpCodes.Leave, Operand);
+                case OpType.Brfalse_s: return new Instruction(reader, OpCodes.Brfalse, Operand);
                 case OpType.Brtrue_s: return new Instruction(reader, OpCodes.Brtrue, Operand);
-                case OpType.Br_s:     return new Instruction(reader, OpCodes.Br, Operand);
-                case OpType.Beq_s:    return new Instruction(reader, OpCodes.Beq, Operand);
-                case OpType.Bge_s:    return new Instruction(reader, OpCodes.Bge, Operand);
+                case OpType.Br_s: return new Instruction(reader, OpCodes.Br, Operand);
+                case OpType.Beq_s: return new Instruction(reader, OpCodes.Beq, Operand);
+                case OpType.Bge_s: return new Instruction(reader, OpCodes.Bge, Operand);
                 case OpType.Bge_un_s: return new Instruction(reader, OpCodes.Bge_Un, Operand);
-                case OpType.Bgt_s:    return new Instruction(reader, OpCodes.Bgt, Operand);
+                case OpType.Bgt_s: return new Instruction(reader, OpCodes.Bgt, Operand);
                 case OpType.Bgt_un_s: return new Instruction(reader, OpCodes.Bgt_Un, Operand);
-                case OpType.Ble_s:    return new Instruction(reader, OpCodes.Ble, Operand);
+                case OpType.Ble_s: return new Instruction(reader, OpCodes.Ble, Operand);
                 case OpType.Ble_un_s: return new Instruction(reader, OpCodes.Ble_Un, Operand);
-                case OpType.Blt_s:    return new Instruction(reader, OpCodes.Blt, Operand);
+                case OpType.Blt_s: return new Instruction(reader, OpCodes.Blt, Operand);
                 case OpType.Blt_un_s: return new Instruction(reader, OpCodes.Blt_Un, Operand);
                 case OpType.Bne_un_s: return new Instruction(reader, OpCodes.Bne_Un, Operand);
-                default:              return this;
+                default: return this;
             }
         }
 
@@ -463,9 +466,9 @@ namespace CIL
         /// <inheritdoc/>
         public override string ToString()
         {
-            var backJumps = loops.IsEmpty()
+            var backJumps = cf == null
                 ? ""
-                : loops.Aggregate(new StringBuilder("<- {"), (o, x) => o.Append(x).Append(",")).Append("}").ToString();
+                : cf.Aggregate(new StringBuilder("<- {"), (o, x) => o.Append(x).Append(",")).Append("}").ToString();
             return OpCode.Name + " " + Resolve() + backJumps;
         }
     }

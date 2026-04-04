@@ -1,12 +1,13 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>netstandard2.0</TargetFramework>
-    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+    <TargetFrameworks>net8.0;net48</TargetFrameworks>
     <Authors>Sandro Magi</Authors>
     <Company />
+    <Product>CIL.Expressions.NET</Product>
     <Description>Decompile CIL bytecode into LINQ epxressions.</Description>
     <Copyright>Sandro Magi 2018</Copyright>
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
     <PackageLicenseUrl>LGPL 2.1</PackageLicenseUrl>
   </PropertyGroup>
 

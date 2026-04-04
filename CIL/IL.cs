@@ -183,7 +183,9 @@ namespace CIL
         /// <param name="code">The method to analyze.</param>
         /// <returns>A stream of instructions.</returns>
         public static Code GetInstructions(this MethodBase code) =>
-            Decode(code.GetILReader(out var byteCodeLength), new Code(byteCodeLength), 0);
+            CFA(Decode(code.GetILReader(out var byteCodeLength), new Code(byteCodeLength), 0), 0, null, null);
+            //CFA(Decode(code.GetILReader(out var byteCodeLength), new Code(byteCodeLength), 0), 0, new HashSet<Label>());
+            //Decode(code.GetILReader(out var byteCodeLength), new Code(byteCodeLength), 0);
 
         /// <summary>
         /// Decompile a method using the specified decompiler.
@@ -216,17 +218,140 @@ namespace CIL
             while (il.MoveNext())
             {
                 var size = bc.Add(offset, ref il.current);
-                if (il.Current.OpCode.IsBranch())
-                {
-                    // tag any branches that jump back in the instruction sequence as loops
-                    var target = il.Current.Operand.Label;
-                    if (target.Offset < offset)
-                        bc.AddLoop(offset, target);
-                }
                 offset += size;
             }
             return bc;
         }
+
+        static Code CFA(Code code, int start, HashSet<Label> trace)
+        {
+            for (int i = start; i < code.Count; ++i)
+            {
+                ref var instr = ref code[i];
+                switch (instr.OpCode.FlowControl)
+                {
+                    case FlowControl.Branch:
+                        //FIXME: could have a conditional branch that jumps inside the loop, then
+                        //an unconditional branch outside the loop. So we need to track these too,
+                        //and possibly some kind of "loop context".
+                        if (trace.Add(code.GetLabel(i)))
+                            i = code.GetIndex(instr.Operand.Label);
+                        else
+                            return code;
+                        break;
+                    case FlowControl.Return:
+                    case FlowControl.Throw:
+                        return code;
+                    case FlowControl.Cond_Branch:
+                        // follow both paths of a conditional branch, so take the branch
+                        // in a recursive call, and then process the path that skips the branch
+                        // after returning
+                        var target = instr.Operand.Label;
+                        var label = code.GetLabel(i);
+                        //if (trace.Add(target))
+                        if (trace.Add(label))
+                        {
+                            CFA(code, code.GetIndex(target), new HashSet<Label>(trace));
+                        }
+                        else
+                        {
+                            // tag spot the loop and then identify any branches in the trace history
+                            // that exit the loop
+                            //code.AddLoop(code.GetLabel(i).Offset, target);
+                            code.AddLoop(label.Offset, target);
+                            var i_t = code.GetIndex(target);
+                            var lowest = Math.Min(i, i_t);
+                            var highest = Math.Max(i, i_t);
+                            foreach (var x in trace.Select(x => code.GetIndex(code[x].Operand.Label)))
+                                if (x < lowest || x > highest)
+                                    code.AddBreak(i, code.GetLabel(x));
+                            return code;
+                        }
+                        break;
+                }
+            }
+            return code;
+        }
+
+        static Code CFA(Code code, int start, Label? loopStart, Label? loopEnd)
+        {
+            for (int i = start; i < code.Count; ++i)
+            {
+                ref var instr = ref code[i];
+                switch (instr.OpCode.FlowControl)
+                {
+                    case FlowControl.Branch:
+                        //FIXME: could have a conditional branch that jumps inside the loop, then
+                        //an unconditional branch outside the loop. So we need to track these too,
+                        //and possibly some kind of "loop context".
+                        if (loopStart > instr.Operand.Label && instr.Operand.Label > loopEnd)
+                            code.AddBreak(i, instr.Operand.Label);
+                        else if (loopStart == null)
+                            loopStart = code.GetLabel(i);
+                        //else if (loopEnd == nu)
+                        i = code.GetIndex(instr.Operand.Label);
+                        break;
+                    case FlowControl.Return:
+                    case FlowControl.Throw:
+                        return code;
+                    case FlowControl.Cond_Branch:
+                        // follow both paths of a conditional branch, so take the branch
+                        // in a recursive call, and then process the path that skips the branch
+                        // after returning
+                        var target = instr.Operand.Label;
+                        var label = code.GetLabel(i);
+                        if (loopStart == null)
+                        {
+                            loopStart = label;
+                        }
+                        if (loopEnd == null)
+                        {
+                            loopEnd = label;
+                        }
+                        if (label <= loopStart)
+                        {
+                            CFA(code, code.GetIndex(target), label, loopEnd);
+                        }
+                        else if (label >= loopEnd)
+                        {
+                            CFA(code, code.GetIndex(target), loopStart, label);
+                        }
+                        else
+                        {
+                            // tag spot the loop and then identify any branches in the trace history
+                            // that exit the loop
+                            //code.AddLoop(code.GetLabel(i).Offset, target);
+                            code.AddLoop(label.Offset, target);
+                            return code;
+                        }
+                        break;
+                }
+            }
+            return code;
+        }
+
+        //static Code CFA(Code code, int i, ref Instruction instr, BranchCond cond, HashSet<(Label, BranchCond)> trace)
+        //{
+        //    // if the jump target is not already in the trace history, then follow the branch
+        //    // otherwise tag it as a loop and return
+        //    var target = instr.Operand.Label;
+        //    if (trace.Add((target, cond)))
+        //    {
+        //        return CFA(code, code.GetIndex(target), new HashSet<(Label, BranchCond)>(trace));
+        //    }
+        //    else
+        //    {
+        //        code.AddLoop(i, target);
+        //        //// check trace history to identify branches that exit the loop as breaks
+        //        //var i_t = code.GetIndex(target);
+        //        //var lowest = Math.Min(i, i_t);
+        //        //var highest = Math.Max(i, i_t);
+        //        //foreach (var x in trace)
+        //        //    if (x < lowest || x > highest)
+        //        //        code.AddBreak(i, code.GetLabel(x));
+        //        return code;
+        //    }
+        //}
 
         static void Process<T>(ILReader il, IExpression<T> exp, Stack<T> eval, Dictionary<Label, T> env, T[] args, T[] locals)
         {
