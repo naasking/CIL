@@ -210,7 +210,7 @@ namespace CIL.Expressions
         }
         public override Expression RightShift(Expression value, Expression shift)
         {
-            return base.RightShift(value, shift);
+            return Expression.RightShift(value, shift);
         }
         public override Expression SizeOf(Type valueType)
         {
@@ -251,6 +251,30 @@ namespace CIL.Expressions
         public override Expression Xor(Expression left, Expression right)
         {
             return Expression.ExclusiveOr(left, right);
+        }
+        public override Expression Duplicate(Expression exp)
+        {
+            return exp;
+        }
+        public override Expression AddressOf(Expression binding)
+        {
+            return binding;
+        }
+        public override Expression Goto(Expression exp)
+        {
+            return exp; //FIXME: I don't think this is correct
+        }
+        public override Expression ObjectInit(Expression address, Type objType)
+        {
+            return Expression.Assign(address, Expression.Default(objType));
+        }
+        public override Expression EndFilter(Expression value)
+        {
+            return value;
+        }
+        public override Expression Unaligned(Expression value)
+        {
+            return value;
         }
 
         public override Type TypeOf(Expression exp)
