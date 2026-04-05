@@ -464,18 +464,28 @@ namespace CIL
                         eval.Push(exp.Equal(eval.Pop(), rhs));
                         goto case OpType.Brtrue;
                     case OpType.Bge:
+                    case OpType.Bge_s:
                     case OpType.Bge_un:
                     case OpType.Bge_un_s:
                         rhs = eval.Pop();
                         eval.Push(exp.GreaterThanOrEqual(eval.Pop(), rhs));
                         goto case OpType.Brtrue;
+                    case OpType.Bgt:
+                    case OpType.Bgt_s:
+                    case OpType.Bgt_un:
+                    case OpType.Bgt_un_s:
+                        rhs = eval.Pop();
+                        eval.Push(exp.GreaterThan(eval.Pop(), rhs));
+                        goto case OpType.Brtrue;
                     case OpType.Ble:
+                    case OpType.Ble_s:
                     case OpType.Ble_un:
                     case OpType.Ble_un_s:
                         rhs = eval.Pop();
                         eval.Push(exp.LessThanOrEqual(eval.Pop(), rhs));
                         goto case OpType.Brtrue;
                     case OpType.Blt:
+                    case OpType.Blt_s:
                     case OpType.Blt_un:
                     case OpType.Blt_un_s:
                         rhs = eval.Pop();
