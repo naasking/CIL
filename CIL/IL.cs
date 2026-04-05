@@ -435,6 +435,10 @@ namespace CIL
                         rhs = eval.Pop();
                         eval.Push(exp.Or(eval.Pop(), rhs));
                         break;
+                    case OpType.Xor:
+                        rhs = eval.Pop();
+                        eval.Push(exp.Xor(eval.Pop(), rhs));
+                        break;
                     case OpType.Not:
                         eval.Push(exp.Not(eval.Pop()));
                         break;
@@ -624,13 +628,15 @@ namespace CIL
                                            .Reverse()
                                            .ToArray();
                         var minstance = method.IsStatic ? default(T) : eval.Pop();
-                        var generated = method.GetCustomAttribute<CompilerGeneratedAttribute>();
-                        if (generated != null && method.IsSpecialName && /*method.IsHideBySig &&*/ (mparams.Length == 0 && method.Name.StartsWith("get_") || mparams.Length == 1 && method.Name.StartsWith("set_")))
+                        if (method.IsSpecialName && (method.Name.StartsWith("get_") || method.Name.StartsWith("set_")))
                         {
                             // decode method call into a property access
                             var pname = method.Name.Substring(4);
                             var prop = method.DeclaringType.GetProperty(pname);
-                            eval.Push(margs.Length == 0 ? exp.Property(minstance, prop) : exp.Property(minstance, prop, margs));
+                            if (prop != null)
+                                eval.Push(margs.Length == 0 ? exp.Property(minstance, prop) : exp.Property(minstance, prop, margs));
+                            else
+                                eval.Push(exp.Call(method, tailcall, minstance, margs));
                         }
                         else
                         {
@@ -726,9 +732,10 @@ namespace CIL
                         eval.Push(exp.Constant(8));
                         break;
                     case OpType.Ldc_i4:
+                        eval.Push(exp.Constant(x.Operand.Int32));
+                        break;
                     case OpType.Ldc_i4_s:
-                        var i4 = x.Operand.Int32;
-                        eval.Push(exp.Constant(i4));
+                        eval.Push(exp.Constant((int)x.Operand.Int8));
                         break;
                     case OpType.Ldc_i8:
                         var i8 = x.Operand.Int64;
@@ -746,7 +753,7 @@ namespace CIL
                     case OpType.Ldsfld:
                         var lfield = x.ResolveField();
                         eval.Push(exp.Field(lfield, lfield.IsStatic ? default(T) : eval.Pop()));
-                        return;
+                        break;
                     case OpType.Ldlen:
                         eval.Push(exp.ArrayLength(eval.Pop()));
                         break;
@@ -841,6 +848,13 @@ namespace CIL
                         eval.Push(exp.Return(eval.Pop()));
                         //break;
                         return;
+                    case OpType.Ldelema:
+                        rhs = eval.Pop();
+                        eval.Push(exp.AddressOf(exp.ArrayGet(eval.Pop(), rhs)));
+                        break;
+                    case OpType.Ldobj:
+                        eval.Push(exp.AddressGet(eval.Pop()));
+                        break;
                     case OpType.Ldelem:
                     case OpType.Ldelem_ref:
                     case OpType.Ldelem_i:
@@ -907,21 +921,22 @@ namespace CIL
                         var lhs = eval.Pop();
                         var tyleft = exp.TypeOf(lhs);
                         var tyright = exp.TypeOf(rhs);
-                        if (tyleft != typeof(bool) || tyleft == tyright)
+                        if (tyleft == tyright)
                         {
                             eval.Push(exp.Equal(lhs, rhs));
                         }
-                        else if (tyleft != typeof(bool) && tyright == typeof(bool))
-                        {
-                            eval.Push(exp.Equal(exp.Cast(lhs, tyright), rhs));
-                        }
-                        else if (tyright != typeof(bool) && tyleft == typeof(bool))
+                        else if (tyleft == typeof(bool) && tyright != typeof(bool))
                         {
                             eval.Push(exp.Equal(lhs, exp.Cast(rhs, tyleft)));
                         }
+                        else if (tyright == typeof(bool) && tyleft != typeof(bool))
+                        {
+                            eval.Push(exp.Equal(exp.Cast(lhs, tyright), rhs));
+                        }
                         else
                         {
-                            throw new InvalidOperationException("Unknown bool comparison!");
+                            // types differ but neither is bool — just compare directly
+                            eval.Push(exp.Equal(lhs, rhs));
                         }
                         break;
                     case OpType.Cgt:
@@ -982,6 +997,26 @@ namespace CIL
                     case OpType.Conv_ovf_i8_un:
                         eval.Push(exp.CastOverflow(eval.Pop(), typeof(long)));
                         break;
+                    case OpType.Conv_ovf_u:
+                    case OpType.Conv_ovf_u_un:
+                        eval.Push(exp.CastOverflow(eval.Pop(), typeof(UIntPtr)));
+                        break;
+                    case OpType.Conv_ovf_u1:
+                    case OpType.Conv_ovf_u1_un:
+                        eval.Push(exp.CastOverflow(eval.Pop(), typeof(byte)));
+                        break;
+                    case OpType.Conv_ovf_u2:
+                    case OpType.Conv_ovf_u2_un:
+                        eval.Push(exp.CastOverflow(eval.Pop(), typeof(ushort)));
+                        break;
+                    case OpType.Conv_ovf_u4:
+                    case OpType.Conv_ovf_u4_un:
+                        eval.Push(exp.CastOverflow(eval.Pop(), typeof(uint)));
+                        break;
+                    case OpType.Conv_ovf_u8:
+                    case OpType.Conv_ovf_u8_un:
+                        eval.Push(exp.CastOverflow(eval.Pop(), typeof(ulong)));
+                        break;
                     case OpType.Conv_r4:
                     case OpType.Conv_r_un:
                         eval.Push(exp.Cast(eval.Pop(), typeof(float)));
@@ -1005,7 +1040,9 @@ namespace CIL
                         eval.Push(exp.Cast(eval.Pop(), typeof(ulong)));
                         break;
                     case OpType.Dup:
-                        eval.Push(exp.Duplicate(eval.Pop()));
+                        var dup = exp.Duplicate(eval.Pop());
+                        eval.Push(dup);
+                        eval.Push(dup);
                         break;
                     case OpType.Newarr:
                         var atype = x.ResolveType();
@@ -1017,6 +1054,9 @@ namespace CIL
                         var cargs = cparams.Select(a => eval.Pop()).Reverse();
                         eval.Push(exp.New(ctor, cargs));
                         break;
+                    case OpType.Throw:
+                        eval.Push(exp.Throw(eval.Pop()));
+                        return;
                     case OpType.Rethrow:
                         eval.Push(exp.Rethrow());
                         break;

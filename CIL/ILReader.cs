@@ -219,7 +219,7 @@ namespace CIL
             for (int i = 0; i < count; ++i)
             {
                 var offset = BitConverter.ToInt32(code, pos);
-                yield return new KeyValuePair<int, IL.Label>(offset, new IL.Label(basep + offset));
+                yield return new KeyValuePair<int, IL.Label>(i, new IL.Label(basep + offset));
                 pos += 4;
             }
         }

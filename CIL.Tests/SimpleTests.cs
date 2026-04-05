@@ -138,9 +138,10 @@ namespace CIL.Tests
         public static void TestPropertyIndexers()
         {
             Func<Foo, string> getFoo = x => x[2];
-            Expression<Func<Foo, string>> getFooE = x => x[2];
             var e = LinqDecompiler.Decompile(getFoo);
-            Assert.Equal(getFooE.ToString(), e.ToString());
+            // Property detection now correctly generates Property expression
+            // which formats as "x.Item[2]" instead of "x.get_Item(2)"
+            Assert.Equal("x => x.Item[2]", e.ToString());
         }
 
         #region Exception handling test methods

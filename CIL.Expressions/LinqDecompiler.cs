@@ -298,7 +298,7 @@ namespace CIL.Expressions
         }
 
         public static Expression<T> Decompile<T>(T func)
-            where T : class
+            where T : Delegate
         {
             if (func == null) throw new ArgumentNullException("func");
             var f = func as Delegate;
