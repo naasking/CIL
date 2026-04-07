@@ -234,7 +234,20 @@ namespace CIL.Expressions
         }
         public override Expression TryCatchFinally(Expression _try, IEnumerable<KeyValuePair<Type, Expression>> _catch, Expression _finally)
         {
-            return Expression.TryCatchFinally(_try, _finally, _catch.Select(x => Expression.Catch(x.Key, x.Value)).ToArray());
+            var catchBlocks = _catch.Select(x =>
+            {
+                var body = x.Value;
+                // Match catch body type to try body type
+                if (body.Type != _try.Type)
+                    body = Expression.Default(_try.Type);
+                return Expression.Catch(x.Key, body);
+            }).ToArray();
+
+            if (_finally != null)
+                return Expression.TryCatchFinally(_try, _finally, catchBlocks);
+            if (catchBlocks.Length > 0)
+                return Expression.TryCatch(_try, catchBlocks);
+            return Expression.TryFinally(_try, Expression.Empty());
         }
         public override Expression TypeAs(Expression exp, Type castTo)
         {
@@ -292,9 +305,16 @@ namespace CIL.Expressions
             return c.Value;
         }
 
-        public override Expression Loop(Expression body, IL.Label exit)
+        public override Expression Loop(Expression body, Expression exitCondition, Expression exitValue)
         {
-            return Expression.Loop(body, Expression.Label());
+            //FIXME: loop has two overloads so I might need to provide both as well.
+            var breakLabel = Expression.Label(exitValue.Type, "break");
+            return Expression.Loop(
+                Expression.Block(
+                    body,
+                    Expression.IfThen(exitCondition, Expression.Break(breakLabel, exitValue))
+                ),
+                breakLabel);
         }
 
         public static Expression<T> Decompile<T>(T func)

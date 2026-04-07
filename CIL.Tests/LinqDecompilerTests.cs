@@ -418,7 +418,9 @@ namespace CIL.Tests
         public void Loop_ReturnsLoopExpression()
         {
             var body = Expression.Constant(0);
-            var result = dec.Loop(body, default(IL.Label));
+            var exitCond = Expression.Constant(false);
+            var exitValue = Expression.Constant(42);
+            var result = dec.Loop(body, exitCond, exitValue);
             Assert.Equal(ExpressionType.Loop, result.NodeType);
         }
 

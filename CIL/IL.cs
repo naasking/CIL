@@ -6,6 +6,7 @@ using System.Reflection;
 using System.Reflection.Emit;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
+using System.Linq.Expressions;
 
 namespace CIL
 {
@@ -367,18 +368,87 @@ namespace CIL
             }
         }
 
-        static void Process<T>(ILReader il, IExpression<T> exp, Stack<T> eval, Dictionary<Label, T> env, T[] args, T[] locals)
+        static void Process<T>(ILReader il, IExpression<T> exp, Stack<T> eval, Dictionary<Label, T> env, T[] args, T[] locals, int stopAt = int.MaxValue)
         {
-            // the simplest way to add branch sharing, but less efficient
-            //if (env.TryGetValue(il.Mark(), out var value))
-            //{
-            //    eval.Push(value);
-            //    return;
-            //}
+            // Build try-start lookup for exception handling detection
+            Dictionary<int, List<ExceptionRegion>> tryLookup = null;
+            if (il.ExceptionHandlers.Length > 0)
+            {
+                tryLookup = new Dictionary<int, List<ExceptionRegion>>();
+                foreach (var eh in il.ExceptionHandlers)
+                {
+                    // Skip handlers outside our processing region.
+                    // Using >= for TryEnd prevents re-detecting the same try block
+                    // when recursively processing its body (where stopAt == TryEnd).
+                    if (eh.TryStart.Offset >= stopAt || eh.TryEnd.Offset >= stopAt) continue;
+                    var key = eh.TryStart.Offset;
+                    if (!tryLookup.TryGetValue(key, out var list))
+                        tryLookup[key] = list = new List<ExceptionRegion>();
+                    list.Add(eh);
+                }
+            }
+
             var tailcall = false;
             while (il.MoveNext())
             {
                 var x = il.Current;//.Simplify();
+
+                // Stop at boundary (used when processing try/handler bodies)
+                if (x.label.Offset >= stopAt)
+                {
+                    il.Seek(x.label); // rewind so caller can continue from here
+                    return;
+                }
+
+                // Detect try block entry and process structured exception handling
+                if (tryLookup != null && tryLookup.TryGetValue(x.label.Offset, out var tryHandlers))
+                {
+                    // Group handlers belonging to the same try region
+                    var firstEnd = tryHandlers[0].TryEnd.Offset;
+                    var sameRegion = tryHandlers.Where(h => h.TryEnd.Offset == firstEnd).ToList();
+
+                    // Process try body
+                    il.Seek(x.label);
+                    var tryEval = new Stack<T>();
+                    Process(il, exp, tryEval, env, args, locals, firstEnd);
+                    T tryBody = tryEval.Count == 0 ? exp.Constant(0) :
+                                tryEval.Count == 1 ? tryEval.Pop() :
+                                exp.Block(tryEval.Reverse());
+
+                    // Process each handler
+                    var catches = new List<KeyValuePair<Type, T>>();
+                    T finallyBody = default(T);
+                    foreach (var h in sameRegion)
+                    {
+                        il.Seek(h.HandlerStart);
+                        var hEval = new Stack<T>();
+                        if (h.IsCatch || h.IsFilter)
+                        {
+                            var catchType = h.CatchType ?? typeof(object);
+                            // Runtime pushes exception object on stack at handler entry
+                            hEval.Push(exp.Param("_ex", catchType));
+                            Process(il, exp, hEval, env, args, locals, h.HandlerEnd.Offset);
+                            T catchBody = hEval.Count == 0 ? exp.Constant(0) :
+                                          hEval.Count == 1 ? hEval.Pop() :
+                                          exp.Block(hEval.Reverse());
+                            catches.Add(new KeyValuePair<Type, T>(catchType, catchBody));
+                        }
+                        else if (h.IsFinally)
+                        {
+                            Process(il, exp, hEval, env, args, locals, h.HandlerEnd.Offset);
+                            if (hEval.Count > 0)
+                                finallyBody = hEval.Count == 1 ? hEval.Pop() : exp.Block(hEval.Reverse());
+                        }
+                    }
+
+                    eval.Push(exp.TryCatchFinally(tryBody, catches, finallyBody));
+
+                    // Seek past all handlers
+                    var lastEnd = tryHandlers.Max(h => h.HandlerEnd.Offset);
+                    il.Seek(new Label(lastEnd));
+                    continue;
+                }
+
                 T rhs;
                 Type type;
                 //int index;
@@ -510,34 +580,92 @@ namespace CIL
                     case OpType.Brtrue_s:
                         // recursively process if-then-else, but only if the targets haven't
                         // already been visited
+                        //FIXME: The original intent behind this library was to traverse the
+                        //instruction stream only once in the forward direction. That's may
+                        //not really feasible given how natural it is to recursively explore
+                        //branches, but the current approach does feel overly complex.
                         var cond = eval.Pop();
-                        var elseStart = il.Mark();                  // save current position
+                        //ERROR: I've added this assertion to detect the infinite loop described above, but it
+                        //also serves as a sanity check that the condition is actually a boolean expression
+                        //(or at least something we can treat as boolean by comparing to zero/null).
+                        Debug.Assert(!(cond is Expression e) || e.Type == typeof(bool));
+                        var elseStart = il.Mark();  // save current position
                         if (!il.MoveNext())
                             throw new InvalidOperationException("Expected an instruction after branch!");
                         var thenStart = x.Operand.Label;
+
+                        // Detect loop: backward branch is a back-edge
+                        if (thenStart.Offset < x.label.Offset)
+                        {
+                            // Process else-branch (loop exit value)
+                            T exitValue;
+                            if (!env.TryGetValue(elseStart, out exitValue))
+                            {
+                                var tmp = new Stack<T>(eval);
+                                Process(il, exp, tmp, env, args, locals, stopAt);
+                                var block = new Stack<T>();
+                                while (tmp.Count > 0 && !eval.Contains(tmp.Peek()))
+                                    block.Push(tmp.Pop());
+                                exitValue = env[elseStart] = block.Count > 0
+                                    ? (block.Count > 1 ? exp.Block(block) : block.Peek())
+                                    : exp.Constant(0);
+                            }
+
+                            // Process loop body from thenStart up to the brtrue instruction. There could
+                            // be another branch between the start and this brtrue instruction though, so
+                            // does this handle that?
+                            il.Seek(thenStart);
+                            var bodyEval = new Stack<T>(eval);
+                            Process(il, exp, bodyEval, env, args, locals, x.label.Offset);
+                            var bodyExprs = new List<T>();
+                            while (bodyEval.Count > 0 && !eval.Contains(bodyEval.Peek()))
+                                bodyExprs.Insert(0, bodyEval.Pop());
+                            // Remove trailing condition local load (was for the brtrue we're replacing)
+                            if (bodyExprs.Count > 0)
+                                bodyExprs.RemoveAt(bodyExprs.Count - 1);
+
+                            T loopBody = bodyExprs.Count > 1 ? exp.Block(bodyExprs)
+                                       : bodyExprs.Count == 1 ? bodyExprs[0]
+                                       : exp.Constant(0);
+                            // Loop: execute body, then if cond is false/zero break with exitValue
+                            var exitCond = exp.TypeOf(cond) == typeof(bool)
+                                ? exp.Not(cond)
+                                : exp.Equal(cond, NullOrZero(exp, exp.TypeOf(cond)));
+                            eval.Push(exp.Loop(loopBody, exitCond, exitValue));
+                            return;
+                        }
+
                         if (!env.TryGetValue(elseStart, out var _else))
                         {
+                            // Pre-populate to prevent infinite recursion on back-edges (loops)
+                            env[elseStart] = exp.Constant(0);
                             //il.Seek(elseStart);                    // seek to _else when branch condition false
                             var tmp = new Stack<T>(eval);
-                            Process(il, exp, tmp, env, args, locals);
+                            Process(il, exp, tmp, env, args, locals, stopAt);
                             // pop until tmp element matches an element in eval, then create block expression
                             var block = new Stack<T>();
-                            while (!eval.Contains(tmp.Peek()))
+                            while (tmp.Count > 0 && !eval.Contains(tmp.Peek()))
                                 block.Push(tmp.Pop());
-                            // extract _then expression
-                            _else = env[thenStart] = block.Count > 1 ? exp.Block(block) : block.Peek();   // extract _else expression
+                            // extract _else expression
+                            _else = env[elseStart] = block.Count > 0
+                                ? (block.Count > 1 ? exp.Block(block) : block.Peek())
+                                : exp.Constant(0);
                         }
                         if (!env.TryGetValue(thenStart, out var _then))
                         {
+                            // Pre-populate to prevent infinite recursion on back-edges (loops)
+                            env[thenStart] = exp.Constant(0);
                             il.Seek(thenStart);                    // seek to _then when branch condition true
                             var tmp = new Stack<T>(eval);
-                            Process(il, exp, tmp, env, args, locals);
+                            Process(il, exp, tmp, env, args, locals, stopAt);
                             // pop until tmp element matches an element in eval, then create block expression
                             var block = new Stack<T>();
-                            while (!eval.Contains(tmp.Peek()))
+                            while (tmp.Count > 0 && !eval.Contains(tmp.Peek()))
                                 block.Push(tmp.Pop());
                             // extract _then expression
-                            _then = env[thenStart] = block.Count > 1 ? exp.Block(block) : block.Peek();
+                            _then = env[thenStart] = block.Count > 0
+                                ? (block.Count > 1 ? exp.Block(block) : block.Peek())
+                                : exp.Constant(0);
                         }
                         eval.Push(exp.If(cond, _then, _else));
                         break;
@@ -552,7 +680,7 @@ namespace CIL
                             {
                                 il.Seek(kv.Value);
                                 var tmp = new Stack<T>(eval);
-                                Process(il, exp, tmp, env, args, locals);
+                                Process(il, exp, tmp, env, args, locals, stopAt);
                                 var block = new Stack<T>();
                                 while (!eval.Contains(tmp.Peek()))
                                     block.Push(tmp.Pop());
@@ -563,44 +691,16 @@ namespace CIL
                         eval.Push(exp.Switch(val, cases));
                         il.Seek(swt);
                         break;
-#if DEBUG
-                    //FIXME: extend ILReader to support consulting exception handling blocks:
-                    //  method.GetMethodBody().ExceptionHandlingClauses[0].TryOffset/TryLength/HandlerOffset
-                    //
+                    //----------- Exception handling instructions ---------
                     case OpType.Leave:
                     case OpType.Leave_s:
-                        //FIXME: should leave be treated differently from br?
-                        //Process(il, exp, eval, args, locals);   // process the .try block
-                        il.Seek(x.Operand.Label); // seek to branch label
-                        eval.Push(exp.Goto(eval.Pop()));
+                        // Leave terminates the current try/catch body processing.
+                        // The structured try-catch detection above handles continuation.
                         return;
-                    case OpType.Endfilter: // return to try context?
-                        //eval.Push()
+                    case OpType.Endfilter:
                         return;
-                    //eval.Push(exp.EndFilter(eval.Pop()));
-                    //break;
                     case OpType.Endfinally:
                         return;
-                    //case OpType.Try:
-                    //    Process(il, exp, eval, args, locals);
-                    //    var leaveTry = eval.Pop();
-                    //    if (il.Current.OpCode.Type() != OpType.Leave || il.Current.OpCode.Type() != OpType.Leave_s || !il.MoveNext())
-                    //        throw new InvalidOperationException("Try-catch-finally requires .try block to end with a leave instruction.");
-                    //    if (!il.MoveNext()) //FIXME: maybe shouldn't call this?
-                    //        return;
-                    //    var handlers = new Dictionary<Type, T>();
-                    //    do
-                    //    {
-                    //        Process(il, exp, eval, args, locals);
-                    //        if (il.Current.OpCode.Type() != OpType.Endfilter)
-                    //    } while (il.Current.OpCode.Type() == OpType.Endfilter);
-                    //    Process(il, exp, eval, args, locals);
-                    //    if (il.Current.OpCode.Type() != OpType.Leave || il.Current.OpCode.Type() != OpType.Leave_s)
-                    //        throw new InvalidOperationException("Try-catch-finally requires .try block to end with a leave instruction.");
-                    //    while (il.Current.OpCode.Type() == OpType.Endfinally);
-                    //    //eval.Push(exp.TryCatchFinally(leaveTry, ));
-                    //    break;
-#endif
 
                     //------------ Method call instructions ---------------
 #if DEBUG

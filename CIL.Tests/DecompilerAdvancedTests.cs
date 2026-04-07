@@ -583,44 +583,52 @@ namespace CIL.Tests
         public void EH_TryInLoop_HasBothLoopAndException_Linq()
         {
             var e = LinqDecompiler.Decompile(TryInLoop);
-            System.Console.WriteLine("EXPR: " + e);
-            System.Console.WriteLine("BODY: " + e.Body);
-            System.Console.WriteLine("BODYTYPE: " + e.Body.NodeType);
-            void DumpExpr(System.Linq.Expressions.Expression expr, int depth = 0)
-            {
-                var prefix = new string(' ', depth * 2);
-                System.Console.WriteLine($"{prefix}{expr.NodeType} [{expr.Type.Name}]: {expr}");
-                if (expr is System.Linq.Expressions.BlockExpression block)
-                    foreach (var x in block.Expressions) DumpExpr(x, depth + 1);
-                else if (expr is System.Linq.Expressions.BinaryExpression bin)
-                {
-                    DumpExpr(bin.Left, depth + 1);
-                    DumpExpr(bin.Right, depth + 1);
-                }
-                else if (expr is System.Linq.Expressions.ConditionalExpression cond)
-                {
-                    System.Console.WriteLine($"{prefix}  TEST:"); DumpExpr(cond.Test, depth + 2);
-                    System.Console.WriteLine($"{prefix}  THEN:"); DumpExpr(cond.IfTrue, depth + 2);
-                    System.Console.WriteLine($"{prefix}  ELSE:"); DumpExpr(cond.IfFalse, depth + 2);
-                }
-                else if (expr is System.Linq.Expressions.TryExpression tryExpr)
-                {
-                    System.Console.WriteLine($"{prefix}  TRY:"); DumpExpr(tryExpr.Body, depth + 2);
-                    foreach (var h in tryExpr.Handlers)
-                    {
-                        System.Console.WriteLine($"{prefix}  CATCH({h.Test.Name}):"); DumpExpr(h.Body, depth + 2);
-                    }
-                    if (tryExpr.Finally != null)
-                    { System.Console.WriteLine($"{prefix}  FINALLY:"); DumpExpr(tryExpr.Finally, depth + 2); }
-                }
-                else if (expr is System.Linq.Expressions.LoopExpression loop)
-                {
-                    System.Console.WriteLine($"{prefix}  LOOP BODY:"); DumpExpr(loop.Body, depth + 2);
-                }
-            }
-            DumpExpr(e.Body);
 
-            //FIXME: fill in checks for loop and nested try-catch
+            // The decompiled expression should be a block containing the loop body
+            Assert.Equal(ExpressionType.Block, e.Body.NodeType);
+
+            // Find the TryCatch expression somewhere in the tree
+            TryExpression tryExpr = null;
+            void FindTry(Expression expr)
+            {
+                if (expr is TryExpression t) { tryExpr = t; return; }
+                if (expr is BlockExpression block)
+                    foreach (var x in block.Expressions) FindTry(x);
+                else if (expr is ConditionalExpression cond)
+                { FindTry(cond.IfTrue); FindTry(cond.IfFalse); }
+                else if (expr is BinaryExpression bin)
+                { FindTry(bin.Left); FindTry(bin.Right); }
+                else if (expr is LoopExpression loop)
+                    FindTry(loop.Body);
+            }
+            FindTry(e.Body);
+
+            Assert.NotNull(tryExpr);
+
+            // Try body should contain the int.Parse call (sum += int.Parse(items[i]))
+            Assert.Contains("Parse", tryExpr.Body.ToString());
+
+            // Should have exactly one catch handler for the catch-all
+            Assert.Single(tryExpr.Handlers);
+            Assert.Equal(typeof(object), tryExpr.Handlers[0].Test);
+
+            // No finally block
+            Assert.Null(tryExpr.Finally);
+
+            //FIXME: loop check fails
+            LoopExpression loopExpr = null;
+            void FindLoop(Expression expr)
+            {
+                if (expr is LoopExpression t) { loopExpr = t; return; }
+                if (expr is BlockExpression block)
+                    foreach (var x in block.Expressions) FindLoop(x);
+                else if (expr is ConditionalExpression cond)
+                { FindLoop(cond.IfTrue); FindLoop(cond.IfFalse); }
+                else if (expr is BinaryExpression bin)
+                { FindLoop(bin.Left); FindLoop(bin.Right); }
+            }
+            FindLoop(e.Body);
+            Assert.NotNull(loopExpr);
         }
 
         [Fact]
