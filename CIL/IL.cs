@@ -581,13 +581,18 @@ namespace CIL
                         // recursively process if-then-else, but only if the targets haven't
                         // already been visited
                         //FIXME: The original intent behind this library was to traverse the
-                        //instruction stream only once in the forward direction. That's may
-                        //not really feasible given how natural it is to recursively explore
-                        //branches, but the current approach does feel overly complex.
+                        //instruction stream only once in the forward direction while minimizing
+                        //allocations. Exploring branches is naturally recursive, so the
+                        //forward-only constraint must probably be relaxed, but exploring branches
+                        //is currently allocating a whole bunch of temporary stacks and then immediately
+                        //discarding them, which seems wasteful. The ideal decompilation approach is to
+                        //find a way to touch every instruction only once without allocations. If we
+                        //need to allocate to track state, the next best solution
+                        //is to lift this to a single allocation at the root of the call tree and
+                        //pass that along through each recursive call.
                         var cond = eval.Pop();
-                        //ERROR: I've added this assertion to detect the infinite loop described above, but it
-                        //also serves as a sanity check that the condition is actually a boolean expression
-                        //(or at least something we can treat as boolean by comparing to zero/null).
+                        // Sanity check that the condition is actually a boolean expression
+                        // (or at least something we can treat as boolean by comparing to zero/null).
                         Debug.Assert(!(cond is Expression e) || e.Type == typeof(bool));
                         var elseStart = il.Mark();  // save current position
                         if (!il.MoveNext())
@@ -634,7 +639,8 @@ namespace CIL
                             eval.Push(exp.Loop(loopBody, exitCond, exitValue));
                             return;
                         }
-
+                        //FIXME: the next two code blocks are basically duplicates, so these should
+                        //be refactored to share code, unless there's a simpler way.
                         if (!env.TryGetValue(elseStart, out var _else))
                         {
                             // Pre-populate to prevent infinite recursion on back-edges (loops)
