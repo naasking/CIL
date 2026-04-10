@@ -825,6 +825,7 @@ namespace CIL.Tests
             var decompiled = LinqDecompiler.Decompile(foo);
             Assert.NotNull(decompiled);
             Assert.Single(decompiled.Parameters);
+            Assert.Equal(decompiled.Parameters[0], decompiled.Body);
             Assert.Equal(typeof(int), decompiled.ReturnType);
         }
 

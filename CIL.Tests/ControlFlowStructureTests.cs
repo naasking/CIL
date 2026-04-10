@@ -1984,5 +1984,843 @@ namespace CIL.Tests
             Assert.True(tryIdx < handlerIdx,
                 "Try region must precede handler region in the instruction stream");
         }
+
+        // ── tree-traversal helpers ────────────────────────────────────────────
+
+        static TryExpression FindFirstTry(Expression e)
+        {
+            if (e is TryExpression t) return t;
+            if (e is BlockExpression b) { foreach (var x in b.Expressions) { var r = FindFirstTry(x); if (r != null) return r; } }
+            if (e is LoopExpression l) return FindFirstTry(l.Body);
+            return null;
+        }
+
+        static LoopExpression FindFirstLoop(Expression e)
+        {
+            if (e is LoopExpression l) return l;
+            if (e is BlockExpression b) { foreach (var x in b.Expressions) { var r = FindFirstLoop(x); if (r != null) return r; } }
+            return null;
+        }
+
+        // Walk to the deepest Goto(Break) inside a loop body.
+        static GotoExpression FindBreakGoto(Expression e, int depth = 0)
+        {
+            if (depth > 10) return null;
+            if (e is GotoExpression g && g.Kind == GotoExpressionKind.Break) return g;
+            if (e is BlockExpression b) { foreach (var x in b.Expressions) { var r = FindBreakGoto(x, depth + 1); if (r != null) return r; } }
+            if (e is ConditionalExpression c)
+            {
+                var r = FindBreakGoto(c.IfTrue, depth + 1);
+                if (r != null) return r;
+                return FindBreakGoto(c.IfFalse, depth + 1);
+            }
+            return null;
+        }
+
+        // Returns true if the expression tree rooted at `e` contains any node
+        // whose NodeType equals `type`.
+        static bool ContainsNodeType(Expression e, ExpressionType type, int depth = 0)
+        {
+            if (e == null || depth > 15) return false;
+            if (e.NodeType == type) return true;
+            switch (e)
+            {
+                case BlockExpression b:
+                    return b.Expressions.Any(x => ContainsNodeType(x, type, depth + 1));
+                case LoopExpression l:
+                    return ContainsNodeType(l.Body, type, depth + 1);
+                case TryExpression t:
+                    return ContainsNodeType(t.Body, type, depth + 1)
+                        || t.Handlers.Any(h => ContainsNodeType(h.Body, type, depth + 1))
+                        || (t.Finally != null && ContainsNodeType(t.Finally, type, depth + 1));
+                case ConditionalExpression c:
+                    return ContainsNodeType(c.Test, type, depth + 1)
+                        || ContainsNodeType(c.IfTrue, type, depth + 1)
+                        || ContainsNodeType(c.IfFalse, type, depth + 1);
+                case BinaryExpression bin:
+                    return ContainsNodeType(bin.Left, type, depth + 1)
+                        || ContainsNodeType(bin.Right, type, depth + 1);
+                case UnaryExpression u:
+                    return ContainsNodeType(u.Operand, type, depth + 1);
+                case MethodCallExpression m:
+                    return m.Arguments.Any(a => ContainsNodeType(a, type, depth + 1))
+                        || (m.Object != null && ContainsNodeType(m.Object, type, depth + 1));
+                case GotoExpression go:
+                    return go.Value != null && ContainsNodeType(go.Value, type, depth + 1);
+                default:
+                    return false;
+            }
+        }
+
+        // ── decompiler tests — loops ──────────────────────────────────────────
+
+        [Fact]
+        public void Decompile_ForLoopSum_BodyIsBlock()
+        {
+            var e = LinqDecompiler.Decompile(new Func<int, int>(ForLoopSum));
+            Assert.Equal(ExpressionType.Block, e.Body.NodeType);
+        }
+
+        [Fact]
+        public void Decompile_ForLoopSum_ContainsLoopExpression()
+        {
+            var e = LinqDecompiler.Decompile(new Func<int, int>(ForLoopSum));
+            Assert.NotNull(FindFirstLoop(e.Body));
+        }
+
+        [Fact]
+        public void Decompile_ForLoopSum_LoopHasBreakLabel()
+        {
+            var e = LinqDecompiler.Decompile(new Func<int, int>(ForLoopSum));
+            var loop = FindFirstLoop(e.Body);
+            Assert.NotNull(loop.BreakLabel);
+        }
+
+        [Fact]
+        public void Decompile_ForLoopSum_LoopBodyHasConditionalBreakGoto()
+        {
+            // The loop's exit condition is modelled as If(Not(cond)) → Goto(break).
+            var e = LinqDecompiler.Decompile(new Func<int, int>(ForLoopSum));
+            var loop = FindFirstLoop(e.Body);
+            Assert.NotNull(loop);
+            var breakGoto = FindBreakGoto(loop.Body);
+            Assert.NotNull(breakGoto);
+            Assert.Equal(GotoExpressionKind.Break, breakGoto.Kind);
+        }
+
+        [Fact]
+        public void Decompile_ForLoopSum_BlockContainsAccumulatorAssignment()
+        {
+            // sum += i is modelled as an Assign whose right side is an Add node.
+            var e = LinqDecompiler.Decompile(new Func<int, int>(ForLoopSum));
+            var loop = FindFirstLoop(e.Body);
+            Assert.NotNull(loop);
+            Assert.True(ContainsNodeType(loop.Body, ExpressionType.Add),
+                "Loop body must contain an Add node for sum += i");
+        }
+
+        [Fact]
+        public void Decompile_ForLoopSum_InitialisesAccumulatorToZero()
+        {
+            // Block starts with _x0 = 0 (sum) and _x1 = 0 (i).
+            var e = LinqDecompiler.Decompile(new Func<int, int>(ForLoopSum));
+            var block = (BlockExpression)e.Body;
+            // The first two expressions should be assignments of constant 0.
+            int zeroInits = block.Expressions
+                .OfType<BinaryExpression>()
+                .Where(b => b.NodeType == ExpressionType.Assign
+                         && b.Right is ConstantExpression c
+                         && Equals(c.Value, 0))
+                .Count();
+            Assert.True(zeroInits >= 2, "Expected at least 2 zero-initialisations (sum and i)");
+        }
+
+        [Fact]
+        public void Decompile_WhileLoopCountdown_BodyIsBlock()
+        {
+            var e = LinqDecompiler.Decompile(new Func<int, int>(WhileLoopCountdown));
+            Assert.Equal(ExpressionType.Block, e.Body.NodeType);
+        }
+
+        [Fact]
+        public void Decompile_WhileLoopCountdown_ContainsLoopExpression()
+        {
+            var e = LinqDecompiler.Decompile(new Func<int, int>(WhileLoopCountdown));
+            Assert.NotNull(FindFirstLoop(e.Body));
+        }
+
+        [Fact]
+        public void Decompile_WhileLoopCountdown_LoopBodyHasConditionalBreakGoto()
+        {
+            var e = LinqDecompiler.Decompile(new Func<int, int>(WhileLoopCountdown));
+            var loop = FindFirstLoop(e.Body);
+            var brk = FindBreakGoto(loop.Body);
+            Assert.NotNull(brk);
+        }
+
+        [Fact]
+        public void Decompile_WhileLoopCountdown_LoopBodyContainsDecrementOfN()
+        {
+            // n-- is n = n - 1, represented as a Subtract node in the loop body.
+            var e = LinqDecompiler.Decompile(new Func<int, int>(WhileLoopCountdown));
+            var loop = FindFirstLoop(e.Body);
+            Assert.True(ContainsNodeType(loop.Body, ExpressionType.Subtract),
+                "Loop body must contain a Subtract node for n--");
+        }
+
+        [Fact]
+        public void Decompile_WhileLoopCountdown_ConditionIsGreaterThanZero()
+        {
+            // The exit test is !(n > 0), so a GreaterThan node must appear in the tree.
+            var e = LinqDecompiler.Decompile(new Func<int, int>(WhileLoopCountdown));
+            Assert.True(ContainsNodeType(e.Body, ExpressionType.GreaterThan),
+                "Expression tree must contain GreaterThan for the n > 0 condition");
+        }
+
+        [Fact]
+        public void Decompile_DoWhileLoop_BodyIsBlock()
+        {
+            var e = LinqDecompiler.Decompile(new Func<int, int>(DoWhileLoop));
+            Assert.Equal(ExpressionType.Block, e.Body.NodeType);
+        }
+
+        [Fact]
+        public void Decompile_DoWhileLoop_ContainsLoopExpression()
+        {
+            var e = LinqDecompiler.Decompile(new Func<int, int>(DoWhileLoop));
+            Assert.NotNull(FindFirstLoop(e.Body));
+        }
+
+        [Fact]
+        public void Decompile_DoWhileLoop_HasFirstIterationBeforeLoop()
+        {
+            // do-while: the first i++ fires before the loop construct.
+            // The outer block should contain an Add assignment before the Loop node.
+            var e = LinqDecompiler.Decompile(new Func<int, int>(DoWhileLoop));
+            var block = (BlockExpression)e.Body;
+            var loopIdx = block.Expressions
+                .Select((expr, idx) => (expr, idx))
+                .First(t => t.expr.NodeType == ExpressionType.Loop).idx;
+            bool foundAdd = block.Expressions
+                .Take(loopIdx)
+                .Any(ex => ContainsNodeType(ex, ExpressionType.Add));
+            Assert.True(foundAdd, "do-while: first iteration body (Add node) must appear before the Loop expression");
+        }
+
+        [Fact]
+        public void Decompile_DoWhileLoop_LoopBodyHasConditionalBreakGoto()
+        {
+            var e = LinqDecompiler.Decompile(new Func<int, int>(DoWhileLoop));
+            var loop = FindFirstLoop(e.Body);
+            Assert.NotNull(FindBreakGoto(loop.Body));
+        }
+
+        [Fact]
+        public void Decompile_DoWhileLoop_ConditionIsLessThan()
+        {
+            // while (i < n) — a LessThan node must appear somewhere in the tree.
+            var e = LinqDecompiler.Decompile(new Func<int, int>(DoWhileLoop));
+            Assert.True(ContainsNodeType(e.Body, ExpressionType.LessThan),
+                "Expression tree must contain LessThan for the i < n condition");
+        }
+
+        // ── loops not yet supported ───────────────────────────────────────────
+
+        [Fact]
+        public void Decompile_ForLoopWithBreak_NotYetSupported()
+        {
+            // Explicit break generates a goto past the loop; the decompiler
+            // cannot yet represent that as a labelled break in the expression tree.
+            Assert.ThrowsAny<Exception>(
+                () => LinqDecompiler.Decompile(new Func<int, int>(ForLoopWithBreak)));
+        }
+
+        [Fact]
+        public void Decompile_ForLoopWithContinue_NotYetSupported()
+        {
+            Assert.ThrowsAny<Exception>(
+                () => LinqDecompiler.Decompile(new Func<int, int>(ForLoopWithContinue)));
+        }
+
+        [Fact]
+        public void Decompile_ForLoopBreakAndContinue_NotYetSupported()
+        {
+            Assert.ThrowsAny<Exception>(
+                () => LinqDecompiler.Decompile(new Func<int, int>(ForLoopBreakAndContinue)));
+        }
+
+        [Fact]
+        public void Decompile_NestedForLoops_NotYetSupported()
+        {
+            // The inner loop produces a bool condition that the outer Add mistakenly
+            // tries to combine with an int.
+            Assert.ThrowsAny<Exception>(
+                () => LinqDecompiler.Decompile(new Func<int, int, int>(NestedForLoops)));
+        }
+
+        [Fact]
+        public void Decompile_WhileBreak_NotYetSupported()
+        {
+            Assert.ThrowsAny<Exception>(
+                () => LinqDecompiler.Decompile(new Func<int, int>(WhileBreak)));
+        }
+
+        [Fact]
+        public void Decompile_NestedLoopsBreakInner_NotYetSupported()
+        {
+            Assert.ThrowsAny<Exception>(
+                () => LinqDecompiler.Decompile(new Func<int, int, int>(NestedLoopsBreakInner)));
+        }
+
+        [Fact]
+        public void Decompile_NestedLoopsContinueOuter_NotYetSupported()
+        {
+            Assert.ThrowsAny<Exception>(
+                () => LinqDecompiler.Decompile(new Func<int, int, int>(NestedLoopsContinueOuter)));
+        }
+
+        // ── decompiler tests — logical connectives ────────────────────────────
+
+        [Fact]
+        public void Decompile_LogicalAndOp_NotYetSupported()
+        {
+            // Short-circuit && leaves the eval stack in a state the decompiler
+            // cannot currently reconstruct (Stack empty on merge path).
+            Assert.ThrowsAny<Exception>(
+                () => LinqDecompiler.Decompile(new Func<int, int, int, bool>(LogicalAndOp)));
+        }
+
+        [Fact]
+        public void Decompile_LogicalOrOp_NotYetSupported()
+        {
+            Assert.ThrowsAny<Exception>(
+                () => LinqDecompiler.Decompile(new Func<int, int, int, bool>(LogicalOrOp)));
+        }
+
+        [Fact]
+        public void Decompile_MixedLogical_NotYetSupported()
+        {
+            Assert.ThrowsAny<Exception>(
+                () => LinqDecompiler.Decompile(new Func<int, int, int, bool>(MixedLogical)));
+        }
+
+        // ── decompiler tests — try-catch (simple) ────────────────────────────
+
+        // Target methods local to this region (same bodies as outer target methods
+        // declared above; redeclared here to keep the decompiler tests self-contained
+        // and avoid name collisions with the outer static methods).
+
+        static int DC_SimpleTryCatch(string s)
+        {
+            try { return int.Parse(s); }
+            catch (FormatException) { return -1; }
+        }
+
+        static int DC_TryMultipleCatch(string s)
+        {
+            try { return int.Parse(s); }
+            catch (FormatException) { return -1; }
+            catch (OverflowException) { return -2; }
+        }
+
+        static int DC_TryFinallyOnly(int x)
+        {
+            try { x *= 2; }
+            finally { x += 1; }
+            return x;
+        }
+
+        static int DC_TryCatchFinally(string s)
+        {
+            int result = 0;
+            try { result = int.Parse(s); }
+            catch (FormatException) { result = -1; }
+            finally { result += 0; }
+            return result;
+        }
+
+        static int DC_NestedTryCatch(string s)
+        {
+            try
+            {
+                try { return int.Parse(s); }
+                catch (FormatException) { return -1; }
+            }
+            catch (Exception) { return -99; }
+        }
+
+        static int DC_TryInLoop(string[] items)
+        {
+            int sum = 0;
+            for (int i = 0; i < items.Length; i++)
+            {
+                try { sum += int.Parse(items[i]); }
+                catch { }
+            }
+            return sum;
+        }
+
+        static int DC_FilteredCatch(string s)
+        {
+            try { return int.Parse(s); }
+            catch (FormatException ex) when (ex.Message.Length > 0) { return -1; }
+        }
+
+        static int DC_CatchAndRethrow(string s)
+        {
+            try { return int.Parse(s); }
+            catch (FormatException) { throw; }
+        }
+
+        // SimpleTryCatch —
+        // Expected structure: Block[2]: Try(body=Assign, Catch(FormatException)=Assign), Param
+
+        [Fact]
+        public void Decompile_SimpleTryCatch_BodyIsBlock()
+        {
+            var e = LinqDecompiler.Decompile(new Func<string, int>(DC_SimpleTryCatch));
+            Assert.Equal(ExpressionType.Block, e.Body.NodeType);
+        }
+
+        [Fact]
+        public void Decompile_SimpleTryCatch_BlockContainsTryExpression()
+        {
+            var e = LinqDecompiler.Decompile(new Func<string, int>(DC_SimpleTryCatch));
+            var block = (BlockExpression)e.Body;
+            Assert.Contains(block.Expressions, ex => ex.NodeType == ExpressionType.Try);
+        }
+
+        [Fact]
+        public void Decompile_SimpleTryCatch_HasOneCatchHandler()
+        {
+            var e = LinqDecompiler.Decompile(new Func<string, int>(DC_SimpleTryCatch));
+            var tryExpr = FindFirstTry(e.Body);
+            Assert.NotNull(tryExpr);
+            Assert.Single(tryExpr.Handlers);
+        }
+
+        [Fact]
+        public void Decompile_SimpleTryCatch_CatchTypeIsFormatException()
+        {
+            var e = LinqDecompiler.Decompile(new Func<string, int>(DC_SimpleTryCatch));
+            var tryExpr = FindFirstTry(e.Body);
+            Assert.Equal(typeof(FormatException), tryExpr.Handlers[0].Test);
+        }
+
+        [Fact]
+        public void Decompile_SimpleTryCatch_TryBodyAssignsParsedValue()
+        {
+            // The try body should contain a call to int.Parse.
+            var e = LinqDecompiler.Decompile(new Func<string, int>(DC_SimpleTryCatch));
+            var tryExpr = FindFirstTry(e.Body);
+            Assert.Contains("Parse", tryExpr.Body.ToString());
+        }
+
+        [Fact]
+        public void Decompile_SimpleTryCatch_CatchBodyAssignsMinusOne()
+        {
+            var e = LinqDecompiler.Decompile(new Func<string, int>(DC_SimpleTryCatch));
+            var tryExpr = FindFirstTry(e.Body);
+            var catchBody = tryExpr.Handlers[0].Body;
+            // Handler body is an Assign where the right side is the constant -1.
+            Assert.Equal(ExpressionType.Assign, catchBody.NodeType);
+            var assign = (BinaryExpression)catchBody;
+            Assert.True(assign.Right is ConstantExpression c && Equals(c.Value, -1),
+                $"Catch body right-side should be -1, got: {assign.Right}");
+        }
+
+        [Fact]
+        public void Decompile_SimpleTryCatch_NoFinallyBlock()
+        {
+            var e = LinqDecompiler.Decompile(new Func<string, int>(DC_SimpleTryCatch));
+            var tryExpr = FindFirstTry(e.Body);
+            Assert.Null(tryExpr.Finally);
+        }
+
+        [Fact]
+        public void Decompile_SimpleTryCatch_LastExpressionIsResultParameter()
+        {
+            // The block ends with the result variable (a Parameter).
+            var e = LinqDecompiler.Decompile(new Func<string, int>(DC_SimpleTryCatch));
+            var block = (BlockExpression)e.Body;
+            Assert.Equal(ExpressionType.Parameter, block.Expressions.Last().NodeType);
+        }
+
+        // TryMultipleCatch —
+        // Expected structure: Block[2]: Try(body, Catch(FE), Catch(OE)), Param
+
+        [Fact]
+        public void Decompile_TryMultipleCatch_HasTwoCatchHandlers()
+        {
+            var e = LinqDecompiler.Decompile(new Func<string, int>(DC_TryMultipleCatch));
+            var tryExpr = FindFirstTry(e.Body);
+            Assert.NotNull(tryExpr);
+            Assert.Equal(2, tryExpr.Handlers.Count);
+        }
+
+        [Fact]
+        public void Decompile_TryMultipleCatch_FirstHandlerIsFormatException()
+        {
+            var e = LinqDecompiler.Decompile(new Func<string, int>(DC_TryMultipleCatch));
+            var tryExpr = FindFirstTry(e.Body);
+            Assert.Equal(typeof(FormatException), tryExpr.Handlers[0].Test);
+        }
+
+        [Fact]
+        public void Decompile_TryMultipleCatch_SecondHandlerIsOverflowException()
+        {
+            var e = LinqDecompiler.Decompile(new Func<string, int>(DC_TryMultipleCatch));
+            var tryExpr = FindFirstTry(e.Body);
+            Assert.Equal(typeof(OverflowException), tryExpr.Handlers[1].Test);
+        }
+
+        [Fact]
+        public void Decompile_TryMultipleCatch_HandlersOrderedAsInSourceCode()
+        {
+            // FormatException catch must come before OverflowException catch.
+            var e = LinqDecompiler.Decompile(new Func<string, int>(DC_TryMultipleCatch));
+            var tryExpr = FindFirstTry(e.Body);
+            var types = tryExpr.Handlers.Select(h => h.Test).ToArray();
+            Assert.Equal(new[] { typeof(FormatException), typeof(OverflowException) }, types);
+        }
+
+        [Fact]
+        public void Decompile_TryMultipleCatch_FirstCatchAssignsMinusOne()
+        {
+            var e = LinqDecompiler.Decompile(new Func<string, int>(DC_TryMultipleCatch));
+            var h = FindFirstTry(e.Body).Handlers[0];
+            Assert.Equal(ExpressionType.Assign, h.Body.NodeType);
+            var rhs = ((BinaryExpression)h.Body).Right;
+            Assert.True(rhs is ConstantExpression c && Equals(c.Value, -1));
+        }
+
+        [Fact]
+        public void Decompile_TryMultipleCatch_SecondCatchAssignsMinusTwo()
+        {
+            var e = LinqDecompiler.Decompile(new Func<string, int>(DC_TryMultipleCatch));
+            var h = FindFirstTry(e.Body).Handlers[1];
+            Assert.Equal(ExpressionType.Assign, h.Body.NodeType);
+            var rhs = ((BinaryExpression)h.Body).Right;
+            Assert.True(rhs is ConstantExpression c && Equals(c.Value, -2));
+        }
+
+        // TryFinallyOnly —
+        // Expected structure: Block[3]: Try(body=Assign(x*=2), Finally=Assign(x+=1)), Assign(_x0=x), Param
+
+        [Fact]
+        public void Decompile_TryFinallyOnly_HasFinallyBlock()
+        {
+            var e = LinqDecompiler.Decompile(new Func<int, int>(DC_TryFinallyOnly));
+            var tryExpr = FindFirstTry(e.Body);
+            Assert.NotNull(tryExpr);
+            Assert.NotNull(tryExpr.Finally);
+        }
+
+        [Fact]
+        public void Decompile_TryFinallyOnly_NoCatchHandlers()
+        {
+            var e = LinqDecompiler.Decompile(new Func<int, int>(DC_TryFinallyOnly));
+            var tryExpr = FindFirstTry(e.Body);
+            Assert.Empty(tryExpr.Handlers);
+        }
+
+        [Fact]
+        public void Decompile_TryFinallyOnly_TryBodyContainsMultiply()
+        {
+            // x *= 2 is x = x * 2 — a Multiply node.
+            var e = LinqDecompiler.Decompile(new Func<int, int>(DC_TryFinallyOnly));
+            var tryExpr = FindFirstTry(e.Body);
+            Assert.True(ContainsNodeType(tryExpr.Body, ExpressionType.Multiply),
+                $"Try body must contain a Multiply node for x *= 2; got: {tryExpr.Body}");
+        }
+
+        [Fact]
+        public void Decompile_TryFinallyOnly_FinallyBodyContainsAdd()
+        {
+            // x += 1 is x = x + 1 — an Add node.
+            var e = LinqDecompiler.Decompile(new Func<int, int>(DC_TryFinallyOnly));
+            var tryExpr = FindFirstTry(e.Body);
+            Assert.True(ContainsNodeType(tryExpr.Finally, ExpressionType.Add),
+                $"Finally body must contain an Add node for x += 1; got: {tryExpr.Finally}");
+        }
+
+        [Fact]
+        public void Decompile_TryFinallyOnly_FinallyBodyIsAssign()
+        {
+            var e = LinqDecompiler.Decompile(new Func<int, int>(DC_TryFinallyOnly));
+            var tryExpr = FindFirstTry(e.Body);
+            Assert.Equal(ExpressionType.Assign, tryExpr.Finally.NodeType);
+        }
+
+        [Fact]
+        public void Decompile_TryFinallyOnly_BlockEndsWithResultParameter()
+        {
+            var e = LinqDecompiler.Decompile(new Func<int, int>(DC_TryFinallyOnly));
+            var block = (BlockExpression)e.Body;
+            Assert.Equal(ExpressionType.Parameter, block.Expressions.Last().NodeType);
+        }
+
+        // TryCatchFinally —
+        // Expected structure: Block[4]: Assign(_x0=0), Try(Catch(FE)), Assign(_x1=_x0), Param
+        // (The finally { result += 0 } is absorbed — adding 0 is a no-op the compiler may elide or keep)
+
+        [Fact]
+        public void Decompile_TryCatchFinally_BodyIsBlock()
+        {
+            var e = LinqDecompiler.Decompile(new Func<string, int>(DC_TryCatchFinally));
+            Assert.Equal(ExpressionType.Block, e.Body.NodeType);
+        }
+
+        [Fact]
+        public void Decompile_TryCatchFinally_HasCatchHandler()
+        {
+            var e = LinqDecompiler.Decompile(new Func<string, int>(DC_TryCatchFinally));
+            var tryExpr = FindFirstTry(e.Body);
+            Assert.NotNull(tryExpr);
+            Assert.NotEmpty(tryExpr.Handlers);
+        }
+
+        [Fact]
+        public void Decompile_TryCatchFinally_CatchTypeIsFormatException()
+        {
+            var e = LinqDecompiler.Decompile(new Func<string, int>(DC_TryCatchFinally));
+            var tryExpr = FindFirstTry(e.Body);
+            Assert.Equal(typeof(FormatException), tryExpr.Handlers[0].Test);
+        }
+
+        [Fact]
+        public void Decompile_TryCatchFinally_BlockStartsWithZeroInit()
+        {
+            // result = 0 should be the first statement in the outer block.
+            var e = LinqDecompiler.Decompile(new Func<string, int>(DC_TryCatchFinally));
+            var block = (BlockExpression)e.Body;
+            var first = block.Expressions[0];
+            Assert.Equal(ExpressionType.Assign, first.NodeType);
+            var rhs = ((BinaryExpression)first).Right;
+            Assert.True(rhs is ConstantExpression c && Equals(c.Value, 0),
+                $"First assignment should initialise to 0, got: {rhs}");
+        }
+
+        [Fact]
+        public void Decompile_TryCatchFinally_TryBodyAssignsParsedValue()
+        {
+            var e = LinqDecompiler.Decompile(new Func<string, int>(DC_TryCatchFinally));
+            var tryExpr = FindFirstTry(e.Body);
+            Assert.Contains("Parse", tryExpr.Body.ToString());
+        }
+
+        [Fact]
+        public void Decompile_TryCatchFinally_BlockEndsWithResultParameter()
+        {
+            var e = LinqDecompiler.Decompile(new Func<string, int>(DC_TryCatchFinally));
+            var block = (BlockExpression)e.Body;
+            Assert.Equal(ExpressionType.Parameter, block.Expressions.Last().NodeType);
+        }
+
+        // NestedTryCatch —
+        // Expected: Block[2]: Try(body=Try(Parse, Catch(FE)), Catch(Exception)→-99), Param
+        // The inner try is nested *inside* the outer Try body.
+
+        [Fact]
+        public void Decompile_NestedTryCatch_BodyIsBlock()
+        {
+            var e = LinqDecompiler.Decompile(new Func<string, int>(DC_NestedTryCatch));
+            Assert.Equal(ExpressionType.Block, e.Body.NodeType);
+        }
+
+        [Fact]
+        public void Decompile_NestedTryCatch_OuterCatchTypeIsException()
+        {
+            var e = LinqDecompiler.Decompile(new Func<string, int>(DC_NestedTryCatch));
+            var outerTry = FindFirstTry(e.Body);
+            Assert.NotNull(outerTry);
+            Assert.Single(outerTry.Handlers);
+            Assert.Equal(typeof(Exception), outerTry.Handlers[0].Test);
+        }
+
+        [Fact]
+        public void Decompile_NestedTryCatch_OuterCatchBodyAssignsMinusNinetyNine()
+        {
+            var e = LinqDecompiler.Decompile(new Func<string, int>(DC_NestedTryCatch));
+            var outerTry = FindFirstTry(e.Body);
+            var catchBody = outerTry.Handlers[0].Body;
+            Assert.Equal(ExpressionType.Assign, catchBody.NodeType);
+            var rhs = ((BinaryExpression)catchBody).Right;
+            Assert.True(rhs is ConstantExpression c && Equals(c.Value, -99),
+                $"Outer catch body should assign -99, got: {rhs}");
+        }
+
+        [Fact]
+        public void Decompile_NestedTryCatch_InnerTryIsNestedInsideOuterTryBody()
+        {
+            // The outer Try body should itself be (or contain) another TryExpression.
+            var e = LinqDecompiler.Decompile(new Func<string, int>(DC_NestedTryCatch));
+            var outerTry = FindFirstTry(e.Body);
+            Assert.NotNull(outerTry);
+            var innerTry = FindFirstTry(outerTry.Body);
+            Assert.NotNull(innerTry);
+        }
+
+        [Fact]
+        public void Decompile_NestedTryCatch_InnerCatchTypeIsFormatException()
+        {
+            var e = LinqDecompiler.Decompile(new Func<string, int>(DC_NestedTryCatch));
+            var outerTry = FindFirstTry(e.Body);
+            var innerTry = FindFirstTry(outerTry.Body);
+            Assert.Single(innerTry.Handlers);
+            Assert.Equal(typeof(FormatException), innerTry.Handlers[0].Test);
+        }
+
+        [Fact]
+        public void Decompile_NestedTryCatch_InnerTryBodyContainsParse()
+        {
+            var e = LinqDecompiler.Decompile(new Func<string, int>(DC_NestedTryCatch));
+            var outerTry = FindFirstTry(e.Body);
+            var innerTry = FindFirstTry(outerTry.Body);
+            Assert.Contains("Parse", innerTry.Body.ToString());
+        }
+
+        // TryInLoop —
+        // Expected: Block[4]: sum=0, i=0, cond=i<len, Loop(Block: Block(Try+i_inc+cond), If→break)
+
+        [Fact]
+        public void Decompile_TryInLoop_BodyIsBlock()
+        {
+            var e = LinqDecompiler.Decompile(new Func<string[], int>(DC_TryInLoop));
+            Assert.Equal(ExpressionType.Block, e.Body.NodeType);
+        }
+
+        [Fact]
+        public void Decompile_TryInLoop_ContainsLoopExpression()
+        {
+            var e = LinqDecompiler.Decompile(new Func<string[], int>(DC_TryInLoop));
+            Assert.NotNull(FindFirstLoop(e.Body));
+        }
+
+        [Fact]
+        public void Decompile_TryInLoop_ContainsTryExpression()
+        {
+            var e = LinqDecompiler.Decompile(new Func<string[], int>(DC_TryInLoop));
+            Assert.NotNull(FindFirstTry(e.Body));
+        }
+
+        [Fact]
+        public void Decompile_TryInLoop_TryIsInsideLoop()
+        {
+            // The TryExpression should be nested within the LoopExpression body.
+            var e = LinqDecompiler.Decompile(new Func<string[], int>(DC_TryInLoop));
+            var loop = FindFirstLoop(e.Body);
+            Assert.NotNull(loop);
+            var tryInLoop = FindFirstTry(loop.Body);
+            Assert.NotNull(tryInLoop);
+        }
+
+        [Fact]
+        public void Decompile_TryInLoop_TryBodyContainsParse()
+        {
+            var e = LinqDecompiler.Decompile(new Func<string[], int>(DC_TryInLoop));
+            var loop = FindFirstLoop(e.Body);
+            var tryExpr = FindFirstTry(loop.Body);
+            Assert.Contains("Parse", tryExpr.Body.ToString());
+        }
+
+        [Fact]
+        public void Decompile_TryInLoop_TryBodyContainsAdd()
+        {
+            // sum += int.Parse(items[i]) contains an Add node.
+            var e = LinqDecompiler.Decompile(new Func<string[], int>(DC_TryInLoop));
+            var loop = FindFirstLoop(e.Body);
+            var tryExpr = FindFirstTry(loop.Body);
+            Assert.True(ContainsNodeType(tryExpr.Body, ExpressionType.Add),
+                $"Try body must contain Add for sum += Parse(...); got: {tryExpr.Body}");
+        }
+
+        [Fact]
+        public void Decompile_TryInLoop_EmptyCatchHasOneHandler()
+        {
+            var e = LinqDecompiler.Decompile(new Func<string[], int>(DC_TryInLoop));
+            var loop = FindFirstLoop(e.Body);
+            var tryExpr = FindFirstTry(loop.Body);
+            Assert.Single(tryExpr.Handlers);
+        }
+
+        [Fact]
+        public void Decompile_TryInLoop_BlockStartsWithSumInitialisedToZero()
+        {
+            var e = LinqDecompiler.Decompile(new Func<string[], int>(DC_TryInLoop));
+            var block = (BlockExpression)e.Body;
+            var first = block.Expressions[0];
+            Assert.Equal(ExpressionType.Assign, first.NodeType);
+            var rhs = ((BinaryExpression)first).Right;
+            Assert.True(rhs is ConstantExpression c && Equals(c.Value, 0));
+        }
+
+        // FilteredCatch —
+        // The `when` filter is stripped: the catch type is represented as Object (catch-all).
+        // Expected: Block[2]: Try(body, Catch(Object)→-1), Param
+
+        [Fact]
+        public void Decompile_FilteredCatch_BodyIsBlock()
+        {
+            var e = LinqDecompiler.Decompile(new Func<string, int>(DC_FilteredCatch));
+            Assert.Equal(ExpressionType.Block, e.Body.NodeType);
+        }
+
+        [Fact]
+        public void Decompile_FilteredCatch_HasOneCatchHandler()
+        {
+            var e = LinqDecompiler.Decompile(new Func<string, int>(DC_FilteredCatch));
+            var tryExpr = FindFirstTry(e.Body);
+            Assert.NotNull(tryExpr);
+            Assert.Single(tryExpr.Handlers);
+        }
+
+        [Fact]
+        public void Decompile_FilteredCatch_FilterStrippedToCatchAll()
+        {
+            // The when-filter is not representable in the current expression model;
+            // the decompiler emits a catch(object) (catch-all) instead.
+            var e = LinqDecompiler.Decompile(new Func<string, int>(DC_FilteredCatch));
+            var tryExpr = FindFirstTry(e.Body);
+            Assert.Equal(typeof(object), tryExpr.Handlers[0].Test);
+        }
+
+        [Fact]
+        public void Decompile_FilteredCatch_CatchBodyAssignsMinusOne()
+        {
+            var e = LinqDecompiler.Decompile(new Func<string, int>(DC_FilteredCatch));
+            var tryExpr = FindFirstTry(e.Body);
+            var body = tryExpr.Handlers[0].Body;
+            Assert.Equal(ExpressionType.Assign, body.NodeType);
+            var rhs = ((BinaryExpression)body).Right;
+            Assert.True(rhs is ConstantExpression c && Equals(c.Value, -1));
+        }
+
+        [Fact]
+        public void Decompile_FilteredCatch_TryBodyContainsParse()
+        {
+            var e = LinqDecompiler.Decompile(new Func<string, int>(DC_FilteredCatch));
+            var tryExpr = FindFirstTry(e.Body);
+            Assert.Contains("Parse", tryExpr.Body.ToString());
+        }
+
+        // CatchAndRethrow —
+        // `throw;` (rethrow) is represented as Default(T) — the value is unreachable.
+        // Expected: Block[2]: Try(body, Catch(FormatException)→Default(Int32)), Param
+
+        [Fact]
+        public void Decompile_CatchAndRethrow_HasFormatExceptionHandler()
+        {
+            var e = LinqDecompiler.Decompile(new Func<string, int>(DC_CatchAndRethrow));
+            var tryExpr = FindFirstTry(e.Body);
+            Assert.NotNull(tryExpr);
+            Assert.Single(tryExpr.Handlers);
+            Assert.Equal(typeof(FormatException), tryExpr.Handlers[0].Test);
+        }
+
+        [Fact]
+        public void Decompile_CatchAndRethrow_HandlerBodyIsDefaultExpression()
+        {
+            // The rethrow is represented as Default(Int32) — the method's return type.
+            var e = LinqDecompiler.Decompile(new Func<string, int>(DC_CatchAndRethrow));
+            var tryExpr = FindFirstTry(e.Body);
+            Assert.Equal(ExpressionType.Default, tryExpr.Handlers[0].Body.NodeType);
+        }
+
+        [Fact]
+        public void Decompile_CatchAndRethrow_TryBodyContainsParse()
+        {
+            var e = LinqDecompiler.Decompile(new Func<string, int>(DC_CatchAndRethrow));
+            var tryExpr = FindFirstTry(e.Body);
+            Assert.Contains("Parse", tryExpr.Body.ToString());
+        }
+
+        [Fact]
+        public void Decompile_CatchAndRethrow_BlockEndsWithResultParameter()
+        {
+            var e = LinqDecompiler.Decompile(new Func<string, int>(DC_CatchAndRethrow));
+            var block = (BlockExpression)e.Body;
+            Assert.Equal(ExpressionType.Parameter, block.Expressions.Last().NodeType);
+        }
     }
 }
