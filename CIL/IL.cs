@@ -3408,8 +3408,8 @@ namespace CIL
                 {
                     var instSlot = PopAny(ref f);
                     inst = instSlot.Value;
-                    // Handle constrained. T callvirt when T is a value type calling a method on object/interface
-                    if (constrained != null && constrained.IsValueType && !method.DeclaringType.IsValueType)
+                    // Handle constrained. T callvirt when T is a concrete value type calling a method on object/interface
+                    if (constrained != null && constrained.IsValueType && !constrained.IsGenericParameter && !method.DeclaringType.IsValueType)
                     {
                         var overrideMethod = ResolveValueTypeOverride(constrained, method);
                         if (overrideMethod != null)
@@ -3523,7 +3523,7 @@ namespace CIL
             static PropertyInfo FindProperty(MethodInfo m, out bool isSetter)
             {
                 isSetter = false;
-                if (!m.Name.StartsWith("get_") && !m.Name.StartsWith("set_"))
+                if (m.DeclaringType == null || (!m.Name.StartsWith("get_") && !m.Name.StartsWith("set_")))
                     return null;
                 const BindingFlags all = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly;
                 foreach (var p in m.DeclaringType.GetProperties(all))
@@ -3749,6 +3749,8 @@ namespace CIL
                 var intSlot = new Slot { Value = exp.Constant(value), Type = typeof(int), Const = ConstKind.Int32, ConstVal = new Operand(value), Flags = SlotFlags.Stable };
                 if (TryConvertConstant(intSlot, type, out var res))
                     return res;
+                if (type.IsGenericParameter || type.ContainsGenericParameters)
+                    return new Slot { Value = exp.Constant(null, type), Type = type, Flags = SlotFlags.Stable };
                 var obj = Activator.CreateInstance(type);
                 return new Slot { Value = exp.Constant(obj, type), Type = type, Const = ConstKind.Ref, ConstObj = obj, Flags = SlotFlags.Stable };
             }
@@ -4102,6 +4104,8 @@ namespace CIL
 
             static bool HasEqualityOperator(Type t)
             {
+                if (t.IsGenericParameter)
+                    return false;
                 try
                 {
                     return t.GetMethod("op_Equality", BindingFlags.Public | BindingFlags.Static, null, new[] { t, t }, null) != null;

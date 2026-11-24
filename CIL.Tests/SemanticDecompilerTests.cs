@@ -622,6 +622,20 @@ namespace CIL.Tests
             Assert.Throws<NotSupportedException>(() => m.Decompile(new LinqDecompiler(), out _));
         }
 
+        class OpenGenericBox<T> where T : struct
+        {
+            public T Value;
+            public string Describe() => Value.ToString();
+        }
+
+        [Fact]
+        public void OpenGenericType_WithConstrainedStructParam_Decodes()
+        {
+            var m = typeof(OpenGenericBox<>).GetMethod(nameof(OpenGenericBox<int>.Describe));
+            var text = m.Decompile(new StringVisitor(), out _);
+            Assert.Contains("ToString", text);
+        }
+
         #endregion
     }
 }
