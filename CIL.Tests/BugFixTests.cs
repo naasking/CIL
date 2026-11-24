@@ -898,12 +898,12 @@ namespace CIL.Tests
         }
 
         [Fact]
-        public void LinqDec_Goto_IsPassThrough()
+        public void LinqDec_Goto_ReturnsGotoExpression()
         {
             var dec = new LinqDecompiler();
-            var x = Expression.Parameter(typeof(int), "x");
-            var result = dec.Goto(x);
-            Assert.Same(x, result);
+            var lbl = dec.Label("L");
+            var result = dec.Goto(lbl);
+            Assert.Equal(ExpressionType.Goto, result.NodeType);
         }
 
         [Fact]

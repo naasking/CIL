@@ -1438,12 +1438,12 @@ namespace CIL.Tests
         }
 
         [Fact]
-        public void Arith_BitwiseNot_NotYetSupported()
+        public void Arith_BitwiseNot_ProducesNotNode()
         {
-            // ~x compiles to (xor x, -1). The decompiler's Not() method cannot
-            // handle int→bool coercion, so decompilation throws.
-            Assert.ThrowsAny<Exception>(
-                () => LinqDecompiler.Decompile(new Func<int, int>(x => ~x)));
+            // ~x compiles to the 'not' instruction, a bitwise complement on integers
+            Func<int, int> foo = x => ~x;
+            Expression<Func<int, int>> expected = x => ~x;
+            Assert.Equal(expected.ToString(), LinqDecompiler.Decompile(foo).ToString());
         }
 
         [Fact]
@@ -1992,7 +1992,16 @@ namespace CIL.Tests
             if (e is TryExpression t) return t;
             if (e is BlockExpression b) { foreach (var x in b.Expressions) { var r = FindFirstTry(x); if (r != null) return r; } }
             if (e is LoopExpression l) return FindFirstTry(l.Body);
+            if (e is ConditionalExpression c) return FindFirstTry(c.IfTrue) ?? FindFirstTry(c.IfFalse);
             return null;
+        }
+
+        // The first protected block that has catch handlers (C# compiles try/catch/finally
+        // as a try/catch nested inside a try/finally).
+        static TryExpression FindFirstTryCatch(Expression e)
+        {
+            var t = FindFirstTry(e);
+            return t == null || t.Handlers.Count > 0 ? t : FindFirstTryCatch(t.Body);
         }
 
         static LoopExpression FindFirstLoop(Expression e)
@@ -2172,19 +2181,17 @@ namespace CIL.Tests
         }
 
         [Fact]
-        public void Decompile_DoWhileLoop_HasFirstIterationBeforeLoop()
+        public void Decompile_DoWhileLoop_RunsBodyOnceBeforeTest()
         {
-            // do-while: the first i++ fires before the loop construct.
-            // The outer block should contain an Add assignment before the Loop node.
-            var e = LinqDecompiler.Decompile(new Func<int, int>(DoWhileLoop));
-            var block = (BlockExpression)e.Body;
-            var loopIdx = block.Expressions
-                .Select((expr, idx) => (expr, idx))
-                .First(t => t.expr.NodeType == ExpressionType.Loop).idx;
-            bool foundAdd = block.Expressions
-                .Take(loopIdx)
-                .Any(ex => ContainsNodeType(ex, ExpressionType.Add));
-            Assert.True(foundAdd, "do-while: first iteration body (Add node) must appear before the Loop expression");
+            // do-while runs its body before the first test: DoWhileLoop(n <= 1) == 1
+            Equivalence.Check(new Func<int, int>(DoWhileLoop), Equivalence.Each(-1, 0, 1, 2, 5));
+        }
+
+        [Fact]
+        public void Decompile_ForAndWhileLoops_TestBeforeFirstIteration()
+        {
+            Equivalence.Check(new Func<int, int>(ForLoopSum), Equivalence.Each(-1, 0, 1, 2, 5));
+            Equivalence.Check(new Func<int, int>(WhileLoopCountdown), Equivalence.Each(-1, 0, 1, 2, 5));
         }
 
         [Fact]
@@ -2204,85 +2211,71 @@ namespace CIL.Tests
                 "Expression tree must contain LessThan for the i < n condition");
         }
 
-        // ── loops not yet supported ───────────────────────────────────────────
+        // ── loops with break and continue ─────────────────────────────────────
+        // Each loop exit is numbered in an exit variable that the code after the
+        // loop dispatches on, so break, continue and early return all decompile.
+
+        static readonly object[][] LoopCounts = Equivalence.Each(-1, 0, 1, 2, 5, 6, 10);
+        static readonly object[][] LoopPairs =
+            (from n in new[] { 0, 1, 3, 5 } from m in new[] { 0, 2, 4, 6 } select new object[] { n, m }).ToArray();
 
         [Fact]
-        public void Decompile_ForLoopWithBreak_NotYetSupported()
-        {
-            // Explicit break generates a goto past the loop; the decompiler
-            // cannot yet represent that as a labelled break in the expression tree.
-            Assert.ThrowsAny<Exception>(
-                () => LinqDecompiler.Decompile(new Func<int, int>(ForLoopWithBreak)));
-        }
+        public void Decompile_ForLoopWithBreak_IsEquivalent() =>
+            Equivalence.Check(new Func<int, int>(ForLoopWithBreak), LoopCounts);
 
         [Fact]
-        public void Decompile_ForLoopWithContinue_NotYetSupported()
-        {
-            Assert.ThrowsAny<Exception>(
-                () => LinqDecompiler.Decompile(new Func<int, int>(ForLoopWithContinue)));
-        }
+        public void Decompile_ForLoopWithContinue_IsEquivalent() =>
+            Equivalence.Check(new Func<int, int>(ForLoopWithContinue), LoopCounts);
 
         [Fact]
-        public void Decompile_ForLoopBreakAndContinue_NotYetSupported()
-        {
-            Assert.ThrowsAny<Exception>(
-                () => LinqDecompiler.Decompile(new Func<int, int>(ForLoopBreakAndContinue)));
-        }
+        public void Decompile_ForLoopBreakAndContinue_IsEquivalent() =>
+            Equivalence.Check(new Func<int, int>(ForLoopBreakAndContinue), LoopCounts);
 
         [Fact]
-        public void Decompile_NestedForLoops_NotYetSupported()
-        {
-            // The inner loop produces a bool condition that the outer Add mistakenly
-            // tries to combine with an int.
-            Assert.ThrowsAny<Exception>(
-                () => LinqDecompiler.Decompile(new Func<int, int, int>(NestedForLoops)));
-        }
+        public void Decompile_NestedForLoops_IsEquivalent() =>
+            Equivalence.Check(new Func<int, int, int>(NestedForLoops), LoopPairs);
 
         [Fact]
-        public void Decompile_WhileBreak_NotYetSupported()
-        {
-            Assert.ThrowsAny<Exception>(
-                () => LinqDecompiler.Decompile(new Func<int, int>(WhileBreak)));
-        }
+        public void Decompile_TripleNestedLoop_IsEquivalent() =>
+            Equivalence.Check(new Func<int, int>(TripleNestedLoop), Equivalence.Each(0, 1, 3));
 
         [Fact]
-        public void Decompile_NestedLoopsBreakInner_NotYetSupported()
-        {
-            Assert.ThrowsAny<Exception>(
-                () => LinqDecompiler.Decompile(new Func<int, int, int>(NestedLoopsBreakInner)));
-        }
+        public void Decompile_WhileBreak_IsEquivalent() =>
+            Equivalence.Check(new Func<int, int>(WhileBreak), LoopCounts);
 
         [Fact]
-        public void Decompile_NestedLoopsContinueOuter_NotYetSupported()
+        public void Decompile_NestedLoopsBreakInner_IsEquivalent() =>
+            Equivalence.Check(new Func<int, int, int>(NestedLoopsBreakInner), LoopPairs);
+
+        [Fact]
+        public void Decompile_NestedLoopsContinueOuter_IsEquivalent() =>
+            Equivalence.Check(new Func<int, int, int>(NestedLoopsContinueOuter), LoopPairs);
+
+        [Fact]
+        public void Decompile_LoopsWithExceptionHandling_AreEquivalent()
         {
-            Assert.ThrowsAny<Exception>(
-                () => LinqDecompiler.Decompile(new Func<int, int, int>(NestedLoopsContinueOuter)));
+            var items = new[] { new object[] { new string[0] }, new object[] { new[] { "1", "x", "3" } } };
+            Equivalence.Check(new Func<string[], int>(ForLoopWithTryCatch), items);
+            Equivalence.Check(new Func<string[], int>(TryCatchContainingLoop), items);
+            Equivalence.Check(new Func<int, int>(WhileWithTryFinally), LoopCounts);
         }
 
         // ── decompiler tests — logical connectives ────────────────────────────
 
-        [Fact]
-        public void Decompile_LogicalAndOp_NotYetSupported()
-        {
-            // Short-circuit && leaves the eval stack in a state the decompiler
-            // cannot currently reconstruct (Stack empty on merge path).
-            Assert.ThrowsAny<Exception>(
-                () => LinqDecompiler.Decompile(new Func<int, int, int, bool>(LogicalAndOp)));
-        }
+        static readonly object[][] LogicalInputs =
+            (from x in new[] { -1, 1 } from y in new[] { 0, 2 } from z in new[] { -5, 3 } select new object[] { x, y, z }).ToArray();
 
         [Fact]
-        public void Decompile_LogicalOrOp_NotYetSupported()
-        {
-            Assert.ThrowsAny<Exception>(
-                () => LinqDecompiler.Decompile(new Func<int, int, int, bool>(LogicalOrOp)));
-        }
+        public void Decompile_LogicalAndOp_IsEquivalent() =>
+            Equivalence.Check(new Func<int, int, int, bool>(LogicalAndOp), LogicalInputs);
 
         [Fact]
-        public void Decompile_MixedLogical_NotYetSupported()
-        {
-            Assert.ThrowsAny<Exception>(
-                () => LinqDecompiler.Decompile(new Func<int, int, int, bool>(MixedLogical)));
-        }
+        public void Decompile_LogicalOrOp_IsEquivalent() =>
+            Equivalence.Check(new Func<int, int, int, bool>(LogicalOrOp), LogicalInputs);
+
+        [Fact]
+        public void Decompile_MixedLogical_IsEquivalent() =>
+            Equivalence.Check(new Func<int, int, int, bool>(MixedLogical), LogicalInputs);
 
         // ── decompiler tests — try-catch (simple) ────────────────────────────
 
@@ -2541,8 +2534,8 @@ namespace CIL.Tests
         }
 
         // TryCatchFinally —
-        // Expected structure: Block[4]: Assign(_x0=0), Try(Catch(FE)), Assign(_x1=_x0), Param
-        // (The finally { result += 0 } is absorbed — adding 0 is a no-op the compiler may elide or keep)
+        // C# compiles try/catch/finally as a try/catch nested inside a try/finally, so the
+        // expected structure is: Block: Assign(_x0=0), Try(body=Try(Catch(FE)), finally), ..., Param
 
         [Fact]
         public void Decompile_TryCatchFinally_BodyIsBlock()
@@ -2555,16 +2548,31 @@ namespace CIL.Tests
         public void Decompile_TryCatchFinally_HasCatchHandler()
         {
             var e = LinqDecompiler.Decompile(new Func<string, int>(DC_TryCatchFinally));
-            var tryExpr = FindFirstTry(e.Body);
+            var tryExpr = FindFirstTryCatch(e.Body);
             Assert.NotNull(tryExpr);
             Assert.NotEmpty(tryExpr.Handlers);
         }
 
         [Fact]
+        public void Decompile_TryCatchFinally_CatchIsNestedInTryFinally()
+        {
+            var e = LinqDecompiler.Decompile(new Func<string, int>(DC_TryCatchFinally));
+            var outer = FindFirstTry(e.Body);
+            // the compiler emits 'result += 0' as 'result = result'
+            Assert.NotNull(outer.Finally);
+            Assert.Equal(ExpressionType.Assign, outer.Finally.NodeType);
+            Assert.Same(FindFirstTryCatch(e.Body), FindFirstTry(outer.Body));
+        }
+
+        [Fact]
+        public void Decompile_TryCatchFinally_IsEquivalent() =>
+            Equivalence.Check(new Func<string, int>(DC_TryCatchFinally), Equivalence.Each(null, "", "12", "abc"));
+
+        [Fact]
         public void Decompile_TryCatchFinally_CatchTypeIsFormatException()
         {
             var e = LinqDecompiler.Decompile(new Func<string, int>(DC_TryCatchFinally));
-            var tryExpr = FindFirstTry(e.Body);
+            var tryExpr = FindFirstTryCatch(e.Body);
             Assert.Equal(typeof(FormatException), tryExpr.Handlers[0].Test);
         }
 
@@ -2585,7 +2593,7 @@ namespace CIL.Tests
         public void Decompile_TryCatchFinally_TryBodyAssignsParsedValue()
         {
             var e = LinqDecompiler.Decompile(new Func<string, int>(DC_TryCatchFinally));
-            var tryExpr = FindFirstTry(e.Body);
+            var tryExpr = FindFirstTryCatch(e.Body);
             Assert.Contains("Parse", tryExpr.Body.ToString());
         }
 
@@ -2736,8 +2744,9 @@ namespace CIL.Tests
         }
 
         // FilteredCatch —
-        // The `when` filter is stripped: the catch type is represented as Object (catch-all).
-        // Expected: Block[2]: Try(body, Catch(Object)→-1), Param
+        // A filter clause catches System.Object, guarded by the decompiled `when` filter
+        // (which also performs the `catch (FormatException ex)` type test).
+        // Expected: Block[2]: Try(body, Catch(Object) when filter → -1), Param
 
         [Fact]
         public void Decompile_FilteredCatch_BodyIsBlock()
@@ -2756,13 +2765,20 @@ namespace CIL.Tests
         }
 
         [Fact]
-        public void Decompile_FilteredCatch_FilterStrippedToCatchAll()
+        public void Decompile_FilteredCatch_HandlerKeepsFilter()
         {
-            // The when-filter is not representable in the current expression model;
-            // the decompiler emits a catch(object) (catch-all) instead.
             var e = LinqDecompiler.Decompile(new Func<string, int>(DC_FilteredCatch));
             var tryExpr = FindFirstTry(e.Body);
             Assert.Equal(typeof(object), tryExpr.Handlers[0].Test);
+            Assert.NotNull(tryExpr.Handlers[0].Filter);
+            Assert.Equal(typeof(bool), tryExpr.Handlers[0].Filter.Type);
+        }
+
+        [Fact]
+        public void Decompile_FilteredCatch_IsEquivalent()
+        {
+            // the filter rejects OverflowException and ArgumentNullException, which must propagate
+            Equivalence.Check(new Func<string, int>(DC_FilteredCatch), Equivalence.Each(null, "", "12", "abc", "99999999999"));
         }
 
         [Fact]
@@ -2785,8 +2801,8 @@ namespace CIL.Tests
         }
 
         // CatchAndRethrow —
-        // `throw;` (rethrow) is represented as Default(T) — the value is unreachable.
-        // Expected: Block[2]: Try(body, Catch(FormatException)→Default(Int32)), Param
+        // `throw;` is a rethrow in the handler body.
+        // Expected: Block[2]: Try(body, Catch(FormatException)→Rethrow), Param
 
         [Fact]
         public void Decompile_CatchAndRethrow_HasFormatExceptionHandler()
@@ -2799,13 +2815,17 @@ namespace CIL.Tests
         }
 
         [Fact]
-        public void Decompile_CatchAndRethrow_HandlerBodyIsDefaultExpression()
+        public void Decompile_CatchAndRethrow_HandlerBodyRethrows()
         {
-            // The rethrow is represented as Default(Int32) — the method's return type.
             var e = LinqDecompiler.Decompile(new Func<string, int>(DC_CatchAndRethrow));
             var tryExpr = FindFirstTry(e.Body);
-            Assert.Equal(ExpressionType.Default, tryExpr.Handlers[0].Body.NodeType);
+            Assert.True(ContainsNodeType(tryExpr.Handlers[0].Body, ExpressionType.Throw),
+                $"Handler must rethrow; got: {tryExpr.Handlers[0].Body}");
         }
+
+        [Fact]
+        public void Decompile_CatchAndRethrow_IsEquivalent() =>
+            Equivalence.Check(new Func<string, int>(DC_CatchAndRethrow), Equivalence.Each(null, "", "12", "abc"));
 
         [Fact]
         public void Decompile_CatchAndRethrow_TryBodyContainsParse()

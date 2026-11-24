@@ -131,12 +131,19 @@ namespace CIL.Tests
         }
 
         [Fact]
-        public void Not_OfNonBool_ThrowsNoCoercion()
+        public void Not_OfInt_IsBitwiseComplement()
         {
-            // int→bool coercion doesn't exist in LINQ expressions.
-            // This path never triggers in practice: CIL uses int for bools,
-            // and the Process interpreter resolves the type before calling Not.
-            Assert.ThrowsAny<Exception>(() => dec.Not(intX));
+            // The CIL 'not' instruction is a bitwise complement on integers.
+            var result = dec.Not(intX);
+            Assert.Equal(ExpressionType.Not, result.NodeType);
+            Assert.Equal(typeof(int), result.Type);
+            Assert.Equal(~5, Expression.Lambda<Func<int, int>>(result, (ParameterExpression)intX).Compile()(5));
+        }
+
+        [Fact]
+        public void Not_OfNot_Cancels()
+        {
+            Assert.Same(boolB, dec.Not(dec.Not(boolB)));
         }
 
         [Fact]
@@ -250,39 +257,6 @@ namespace CIL.Tests
             Assert.Equal(typeof(string), result.Type);
         }
 
-        [Fact]
-        public void TypeOf_ReturnsCorrectType()
-        {
-            Assert.Equal(typeof(int), dec.TypeOf(intX));
-            Assert.Equal(typeof(string), dec.TypeOf(strS));
-            Assert.Equal(typeof(bool), dec.TypeOf(boolB));
-        }
-
-        [Fact]
-        public void IsConstant_TrueForConstant()
-        {
-            Assert.True(dec.IsConstant(Expression.Constant(1)));
-        }
-
-        [Fact]
-        public void IsConstant_FalseForParameter()
-        {
-            Assert.False(dec.IsConstant(intX));
-        }
-
-        [Fact]
-        public void Value_ReturnsConstantValue()
-        {
-            Assert.Equal(42, dec.Value(Expression.Constant(42)));
-            Assert.Equal("hi", dec.Value(Expression.Constant("hi")));
-        }
-
-        [Fact]
-        public void Value_ThrowsForNonConstant()
-        {
-            Assert.Throws<InvalidCastException>(() => dec.Value(intX));
-        }
-
         #endregion
 
         #region Type operations
@@ -327,10 +301,11 @@ namespace CIL.Tests
         }
 
         [Fact]
-        public void Box_ReturnsOriginal()
+        public void Box_ConvertsToObject()
         {
-            var result = dec.Box(intX);
-            Assert.Same(intX, result);
+            var result = dec.Box(intX, typeof(int));
+            Assert.Equal(ExpressionType.Convert, result.NodeType);
+            Assert.Equal(typeof(object), result.Type);
         }
 
         [Fact]
@@ -402,13 +377,12 @@ namespace CIL.Tests
         [Fact]
         public void Switch_ReturnsSwitchExpression()
         {
-            // Switch cases must be void or provide a default body
             var cases = new[]
             {
-                new KeyValuePair<int, Expression>(0, Expression.Empty()),
-                new KeyValuePair<int, Expression>(1, Expression.Empty()),
+                new KeyValuePair<int, Expression>(0, Expression.Constant(10)),
+                new KeyValuePair<int, Expression>(1, Expression.Constant(20)),
             };
-            var result = dec.Switch(intX, cases);
+            var result = dec.Switch(intX, cases, Expression.Constant(-1));
             Assert.Equal(ExpressionType.Switch, result.NodeType);
             var sw = (SwitchExpression)result;
             Assert.Equal(2, sw.Cases.Count);
@@ -418,9 +392,9 @@ namespace CIL.Tests
         public void Loop_ReturnsLoopExpression()
         {
             var body = Expression.Constant(0);
-            var exitCond = Expression.Constant(false);
-            var exitValue = Expression.Constant(42);
-            var result = dec.Loop(body, exitCond, exitValue);
+            var brk = dec.Label("break");
+            var cont = dec.Label("continue");
+            var result = dec.Loop(body, brk, cont);
             Assert.Equal(ExpressionType.Loop, result.NodeType);
         }
 
@@ -586,11 +560,13 @@ namespace CIL.Tests
         #region Array operations
 
         [Fact]
-        public void Array_ReturnsNewArrayInit()
+        public void Array_ReturnsNewArrayBounds()
         {
+            // newarr takes the array length, so this is new int[5], not new[] { 5 }
             var result = dec.Array(typeof(int), new[] { Expression.Constant(5) });
-            Assert.Equal(ExpressionType.NewArrayInit, result.NodeType);
+            Assert.Equal(ExpressionType.NewArrayBounds, result.NodeType);
             Assert.Equal(typeof(int[]), result.Type);
+            Assert.Equal(5, Expression.Lambda<Func<int[]>>(result).Compile()().Length);
         }
 
         [Fact]
@@ -640,10 +616,11 @@ namespace CIL.Tests
         [Fact]
         public void TryCatchFinally_SingleCatch()
         {
-            var tryBody = Expression.Constant(1);
+            var tryBody = Expression.Empty();
+            var ex = Expression.Parameter(typeof(InvalidOperationException), "_ex");
             var catches = new[]
             {
-                new KeyValuePair<Type, Expression>(typeof(InvalidOperationException), Expression.Constant(2)),
+                new CatchHandler<Expression>(typeof(InvalidOperationException), ex, Expression.Empty()),
             };
             var finallyBody = Expression.Empty();
             var result = dec.TryCatchFinally(tryBody, catches, finallyBody);
@@ -658,11 +635,11 @@ namespace CIL.Tests
         [Fact]
         public void TryCatchFinally_MultipleCatches()
         {
-            var tryBody = Expression.Constant(1);
+            var tryBody = Expression.Empty();
             var catches = new[]
             {
-                new KeyValuePair<Type, Expression>(typeof(FormatException), Expression.Constant(-1)),
-                new KeyValuePair<Type, Expression>(typeof(OverflowException), Expression.Constant(-2)),
+                new CatchHandler<Expression>(typeof(FormatException), Expression.Parameter(typeof(FormatException), "_ex1"), Expression.Empty()),
+                new CatchHandler<Expression>(typeof(OverflowException), Expression.Parameter(typeof(OverflowException), "_ex2"), Expression.Empty()),
             };
             var finallyBody = Expression.Empty();
             var result = dec.TryCatchFinally(tryBody, catches, finallyBody);
@@ -692,17 +669,20 @@ namespace CIL.Tests
         }
 
         [Fact]
-        public void Goto_ReturnsOriginal()
+        public void Goto_ReturnsGotoExpression()
         {
-            var result = dec.Goto(intX);
-            Assert.Same(intX, result);
+            var lbl = dec.Label("L");
+            var result = dec.Goto(lbl);
+            Assert.Equal(ExpressionType.Goto, result.NodeType);
         }
 
         [Fact]
-        public void Return_ReturnsOriginal()
+        public void Return_ReturnsGotoReturnExpression()
         {
-            var result = dec.Return(intX);
-            Assert.Same(intX, result);
+            var localDec = new LinqDecompiler();
+            var result = localDec.Return(intX);
+            Assert.Equal(ExpressionType.Goto, result.NodeType);
+            Assert.Equal(GotoExpressionKind.Return, ((GotoExpression)result).Kind);
         }
 
         [Fact]

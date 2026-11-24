@@ -386,36 +386,54 @@ namespace CIL.Tests
 
         #endregion
 
-        #region Decompilation — documented limitations
+        #region Decompilation — branches with merge points
 
-        // Ternary operators compiled in debug mode use stloc/ldloc for the
-        // merge point. The recursive branch-following in Process diverges when
-        // both branches store to the same local and converge via br to a shared
-        // ldloc+ret sequence, exhausting the eval stack.
+        // These used to throw: the fall-through arm of every conditional branch skipped its
+        // first instruction, branch arms saw the evaluation stack in reverse order, and
+        // brfalse on a bool built Constant(null, bool).
 
-        [Fact]
-        public void Decompile_TernaryWithLocalMerge_NotYetSupported()
-        {
-            Assert.ThrowsAny<Exception>(
-                () => LinqDecompiler.Decompile(new Func<int, int>(Ternary)));
-        }
+        static readonly object[][] SignedInputs = new[] { -200, -100, -1, 0, 1, 50, 100, 101, 200 }.Select(x => new object[] { x }).ToArray();
 
         [Fact]
-        public void Decompile_NullCoalescing_NotYetSupported()
-        {
-            // The ?? operator generates dup + brtrue + pop which leaves the
-            // eval stack in an inconsistent state.
-            Assert.ThrowsAny<Exception>(
-                () => LinqDecompiler.Decompile(new Func<string, string>(NullFallback)));
-        }
+        public void Decompile_TernaryWithLocalMerge_IsEquivalent() =>
+            Equivalence.Check(new Func<int, int>(Ternary), SignedInputs);
 
         [Fact]
-        public void Decompile_MultiReturnWithBoolBranch_NotYetSupported()
+        public void Decompile_NestedTernary_IsEquivalent() =>
+            Equivalence.Check(new Func<int, int>(NestedTernary), SignedInputs);
+
+        [Fact]
+        public void Decompile_NullCoalescing_IsEquivalent() =>
+            Equivalence.Check(new Func<string, string>(NullFallback), Equivalence.Each(null, "", "x"));
+
+        [Fact]
+        public void Decompile_MultiReturnWithBoolBranch_IsEquivalent() =>
+            Equivalence.Check(new Func<int, int>(MultiReturn), SignedInputs);
+
+        [Fact]
+        public void Decompile_Switch_IsEquivalent() =>
+            Equivalence.Check(new Func<int, int>(SwitchMethod), Equivalence.Each(-1, 0, 1, 2, 3));
+
+        [Fact]
+        public void Decompile_ChainedComparisons_IsEquivalent() =>
+            Equivalence.Check(new Func<int, int, int, int>(ChainedComparisons),
+                (from x in new[] { 1, 2, 3 } from y in new[] { 1, 2, 3 } from z in new[] { 1, 2, 3 } select new object[] { x, y, z }).ToArray());
+
+        [Fact]
+        public void Decompile_ExceptionHandling_IsEquivalent()
         {
-            // brfalse on a bool comparison hits NullOrZero with typeof(bool),
-            // which is a value type — Constant(null, bool) is invalid.
-            Assert.ThrowsAny<Exception>(
-                () => LinqDecompiler.Decompile(new Func<int, int>(MultiReturn)));
+            var inputs = Equivalence.Each(null, "", "12", "abc", "99999999999");
+            Equivalence.Check(new Func<string, int>(SimpleTryCatch), inputs);
+            Equivalence.Check(new Func<string, int>(TryMultipleCatch), inputs);
+            Equivalence.Check(new Func<string, int>(TryCatchFinally), inputs);
+            Equivalence.Check(new Func<string, int>(NestedTryCatch), inputs);
+            Equivalence.Check(new Func<string, int>(DeeplyNestedTry), inputs);
+            Equivalence.Check(new Func<string, int>(CatchWithVariable), inputs);
+            Equivalence.Check(new Func<string, int>(CatchAndRethrow), inputs);
+            Equivalence.Check(new Func<string, int>(FilteredCatch), inputs);
+            Equivalence.Check(new Func<string, int>(TryFinallyInTryCatch), inputs);
+            Equivalence.Check(new Func<int, int>(TryFinallyOnly), Equivalence.Each(0, 3, -7));
+            Equivalence.Check(new Func<string[], int>(TryInLoop), new object[] { new string[0] }, new object[] { new[] { "1", "x", "3" } });
         }
 
         #endregion

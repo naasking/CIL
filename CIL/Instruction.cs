@@ -100,6 +100,19 @@ namespace CIL
         /// Construct an operand from a value.
         /// </summary>
         /// <param name="x">The operand value.</param>
+        /// <remarks>
+        /// Without this overload, a long argument binds to <see cref="Operand(float)"/>
+        /// and ldc.i8 operands are silently corrupted.
+        /// </remarks>
+        public Operand(long x)
+            : this()
+        {
+            this.Int64 = x;
+        }
+        /// <summary>
+        /// Construct an operand from a value.
+        /// </summary>
+        /// <param name="x">The operand value.</param>
         public Operand(short x)
             : this()
         {
@@ -516,7 +529,7 @@ namespace CIL
         {
             if (OpCode.OperandType != OperandType.InlineTok)
                 throw new InvalidOperationException("Instruction does not reference a member.");
-            return reader.ResolveMethod(Operand.MetadataToken);
+            return reader.ResolveMember(Operand.MetadataToken);
         }
 
         /// <summary>

@@ -1,8 +1,6 @@
 ﻿using System;
 using System.Reflection;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 
 namespace CIL
 {
@@ -11,11 +9,12 @@ namespace CIL
         public virtual T Param(ParameterInfo x) { throw new NotSupportedException(); }
         public virtual T Param(string name, Type type) { throw new NotSupportedException(); }
         public virtual T Local(LocalVariableInfo x) { throw new NotSupportedException(); }
-        //T Bool(T e) { throw new NotSupportedException(); }
-        public virtual T Constant<TValue>(TValue value) { throw new NotSupportedException(); } // or should elaborate?
-        public virtual T Constant(object value, Type type) { throw new NotSupportedException(); } // or should elaborate?
+        public virtual T Constant<TValue>(TValue value) { throw new NotSupportedException(); }
+        public virtual T Constant(object value, Type type) { throw new NotSupportedException(); }
         public virtual T And(T left, T right) { throw new NotSupportedException(); }
         public virtual T Or(T left, T right) { throw new NotSupportedException(); }
+        public virtual T AndAlso(T left, T right) { throw new NotSupportedException(); }
+        public virtual T OrElse(T left, T right) { throw new NotSupportedException(); }
         public virtual T Xor(T left, T right) { throw new NotSupportedException(); }
         public virtual T Not(T exp) { throw new NotSupportedException(); }
         public virtual T LeftShift(T value, T shift) { throw new NotSupportedException(); }
@@ -30,21 +29,26 @@ namespace CIL
         public virtual T Modulo(T left, T right) { throw new NotSupportedException(); }
         public virtual T If(T cond, T _then, T _else) { throw new NotSupportedException(); }
         public virtual T If(T cond, T _then) { throw new NotSupportedException(); }
+        public virtual T Label(string name) { throw new NotSupportedException(); }
+        public virtual T MarkLabel(T label) { throw new NotSupportedException(); }
+        public virtual T Goto(T label) { throw new NotSupportedException(); }
+        public virtual T Break(T label) { throw new NotSupportedException(); }
+        public virtual T Continue(T label) { throw new NotSupportedException(); }
+        public virtual T Loop(T body, T breakLabel, T continueLabel) { throw new NotSupportedException(); }
         // 'obj' can be null for static methods
         public virtual T Property(T obj, PropertyInfo getter) { throw new NotSupportedException(); }
         public virtual T Property(T obj, PropertyInfo getter, IEnumerable<T> indexers) { throw new NotSupportedException(); }
-        //public virtual T Set(T obj, MethodBase setter, T value) { throw new NotSupportedException(); }
         public virtual T Call(MethodBase method, bool tailcall, T obj, IEnumerable<T> args) { throw new NotSupportedException(); }
         public virtual T CallIndirect(byte[] signature, T methodPtr, bool tailcall, IEnumerable<T> args) { throw new NotSupportedException(); }
         public virtual T GetPointer(MethodBase method, T obj) { throw new NotSupportedException(); }
-        public virtual T Box(T exp) { throw new NotSupportedException(); }
+        public virtual T Box(T exp, Type type) { throw new NotSupportedException(); }
         public virtual T Cast(T exp, Type castTo) { throw new NotSupportedException(); }
         public virtual T CastOverflow(T exp, Type castTo) { throw new NotSupportedException(); }
         public virtual T TypeAs(T exp, Type castTo) { throw new NotSupportedException(); }
         public virtual T Field(FieldInfo field, T obj) { throw new NotSupportedException(); }
+        public virtual T Return() { throw new NotSupportedException(); }
         public virtual T Return(T exp) { throw new NotSupportedException(); }
-        public virtual T Switch<TCase>(T value, IEnumerable<KeyValuePair<TCase, T>> branches) { throw new NotSupportedException(); }
-        public virtual T Goto(T exp) { throw new NotSupportedException(); }
+        public virtual T Switch<TCase>(T value, IEnumerable<KeyValuePair<TCase, T>> branches, T defaultBranch) { throw new NotSupportedException(); }
         public virtual T Negate(T exp) { throw new NotSupportedException(); }
         public virtual T Equal(T lhs, T rhs) { throw new NotSupportedException(); }
         public virtual T NotEqual(T lhs, T rhs) { throw new NotSupportedException(); }
@@ -76,17 +80,7 @@ namespace CIL
         public virtual T StructCopy(T dst, T src, Type structType) { throw new NotSupportedException(); }
         public virtual T EndFilter(T value) { throw new NotSupportedException(); }
         public virtual T SizeOf(Type valueType) { throw new NotSupportedException(); }
-        public virtual T TryCatchFinally(T _try, IEnumerable<KeyValuePair<Type, T>> _catch, T _finally) { throw new NotSupportedException(); }
-
-        // control attributes
-        //void Tailcall() { throw new NotSupportedException(); }
-        //void Constrain(Type type) { throw new NotSupportedException(); }
-
-        // extract info from expressions
-        public virtual Type TypeOf(T exp) { throw new NotSupportedException(); }
-        public virtual bool IsConstant(T exp) { throw new NotSupportedException(); }
-        public virtual object Value(T exp) { throw new NotSupportedException(); }
-
-        public virtual T Loop(T body, T exitCondition, T exitValue) => throw new NotSupportedException();
+        public virtual T TryCatchFinally(T _try, IEnumerable<CatchHandler<T>> handlers, T _finally) { throw new NotSupportedException(); }
+        public virtual T TryFault(T _try, T _fault) { throw new NotSupportedException(); }
     }
 }
