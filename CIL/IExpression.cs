@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Reflection;
 using System.Collections.Generic;
 
@@ -128,6 +128,9 @@ namespace CIL
         T BlockCopy(T dst, T src, T byteCount);
         T Block(IEnumerable<T> e);
         T StructCopy(T dst, T src, Type structType);
+        T MakeRefAny(T address, Type type);
+        T RefAnyValue(T typedRef, Type type);
+        T RefAnyType(T typedRef);
         T EndFilter(T value);
         T SizeOf(Type valueType);
         /// <summary>

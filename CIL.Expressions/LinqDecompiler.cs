@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Linq.Expressions;
 using System.Collections.Generic;
 using System.Linq;
@@ -23,14 +23,22 @@ namespace CIL.Expressions
         public override Expression Add(Expression left, Expression right) =>
             Expression.Add(left, right);
 
-        public override Expression AddressGet(Expression address) =>
-            address;
+        public override Expression AddressGet(Expression address)
+        {
+            if (address.Type.IsPointer)
+                throw new NotSupportedException("Unmanaged pointer dereference is not supported by LINQ Expressions.");
+            return address;
+        }
 
         public override Expression AddOverflow(Expression left, Expression right) =>
             Expression.AddChecked(left, right);
 
-        public override Expression AddressSet(Expression address, Expression value) =>
-            Assign(address, value);
+        public override Expression AddressSet(Expression address, Expression value)
+        {
+            if (address.Type.IsPointer)
+                throw new NotSupportedException("Unmanaged pointer store is not supported by LINQ Expressions.");
+            return Assign(address, value);
+        }
 
         public override Expression And(Expression left, Expression right) =>
             Expression.And(left, right);
@@ -67,10 +75,14 @@ namespace CIL.Expressions
         public override Expression Property(Expression obj, PropertyInfo property, IEnumerable<Expression> indexers) =>
             Expression.Property(obj, property, indexers);
 
-        public override Expression Call(MethodBase method, bool tailcall, Expression obj, IEnumerable<Expression> args) =>
-            method.IsStatic
-                ? Expression.Call((MethodInfo)method, args)
-                : Expression.Call(obj, (MethodInfo)method, args);
+        public override Expression Call(MethodBase method, bool tailcall, Expression obj, IEnumerable<Expression> args)
+        {
+            if (!(method is MethodInfo mi))
+                throw new NotSupportedException("Reference-type constructor chaining is not supported by LINQ Expressions.");
+            return mi.IsStatic
+                ? Expression.Call(mi, args)
+                : Expression.Call(obj, mi, args);
+        }
 
         public override Expression Cast(Expression exp, Type castTo)
         {
@@ -201,8 +213,14 @@ namespace CIL.Expressions
         public override Expression LessThanOrEqual(Expression lhs, Expression rhs) =>
             Expression.LessThanOrEqual(lhs, rhs);
 
-        public override Expression Local(LocalVariableInfo x) =>
-            Expression.Variable(x.LocalType, "_x" + x.LocalIndex);
+        public override Expression Local(LocalVariableInfo x)
+        {
+            if (x.LocalType.IsByRef)
+                throw new NotSupportedException("ByRef local variables are not supported by LINQ Expressions.");
+            if (x.LocalType.IsPointer)
+                throw new NotSupportedException("Pointer types are not supported by LINQ Expressions.");
+            return Expression.Variable(x.LocalType, "_x" + x.LocalIndex);
+        }
 
         public override Expression Modulo(Expression left, Expression right) =>
             Expression.Modulo(left, right);
@@ -249,8 +267,12 @@ namespace CIL.Expressions
         public override Expression Param(ParameterInfo x) =>
             Param(x.Name, x.ParameterType);
 
-        public override Expression Param(string name, Type type) =>
-            Expression.Parameter(type, name);
+        public override Expression Param(string name, Type type)
+        {
+            if (type.IsPointer)
+                throw new NotSupportedException("Pointer types are not supported by LINQ Expressions.");
+            return Expression.Parameter(type, name);
+        }
 
         public override Expression Rethrow() =>
             Expression.Rethrow();
@@ -400,6 +422,8 @@ namespace CIL.Expressions
             var free = FreeVariables.Find(body).Except(parameters).ToList();
             if (free.Count > 0)
             {
+                if (free.Any(v => v.IsByRef))
+                    throw new NotSupportedException("ByRef local variables are not supported by LINQ Expressions.");
                 var init = new List<Expression>();
                 if (!method.IsStatic && !isOpenInstance && free.Contains(args[0]))
                     init.Add(Expression.Assign(args[0], Expression.Constant(func.Target, args[0].Type)));

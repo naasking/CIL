@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -577,14 +577,25 @@ namespace CIL
         }
 
         /// <summary>
-        /// Resolves a type token.
+        /// Resolves a signature token to its raw bytes.
         /// </summary>
-        /// <returns>The type data.</returns>
+        /// <returns>The signature blob bytes.</returns>
         public byte[] ResolveSignature()
         {
             if (OpCode.OperandType != OperandType.InlineSig)
                 throw new InvalidOperationException("Instruction does not reference a signature.");
             return reader.ResolveSignature(Operand.MetadataToken);
+        }
+
+        /// <summary>
+        /// Resolves a call-site signature token into a decoded <see cref="CallSignature"/>.
+        /// </summary>
+        /// <returns>The decoded call-site signature.</returns>
+        public CallSignature ResolveCallSignature()
+        {
+            if (OpCode.OperandType != OperandType.InlineSig)
+                throw new InvalidOperationException("Instruction does not reference a signature.");
+            return reader.ResolveCallSignature(Operand.MetadataToken);
         }
 
         /// <summary>

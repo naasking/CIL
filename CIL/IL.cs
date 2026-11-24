@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -50,7 +50,7 @@ namespace CIL
             {
                 if (offset < 0)
                     throw new ArgumentException("Invalid instruction offset.");
-                this.offset = (ushort)offset;
+                this.offset = offset;
             }
             /// <inheritdoc/>
             public override bool Equals(object obj)
@@ -78,10 +78,7 @@ namespace CIL
                 return "IL_" + Offset.ToString("X4");
             }
 
-            /// <summary>
-            /// Max CIL method size is 65535 bytes, so ushort is sufficient to store instruction offsets.
-            /// </summary>
-            ushort offset;
+            int offset;
 
             /// <summary>
             /// The offset of the instruction in the bytecode stream.
@@ -89,7 +86,7 @@ namespace CIL
             public int Offset
             {
                 get => offset;
-                set => offset = (ushort)value;
+                set => offset = value;
             }
 
             /// <inheritdoc/>
@@ -2105,15 +2102,13 @@ namespace CIL
                     }
                     else if (produced == 1)
                     {
-                        // Value-producing expression where one arm throws/returns (e.g. a ? throw E : b)
+                        // Value-producing expression where one arm throws/returns (e.g. a ? throw E : b, or ref)
                         Truncate(ref f, liveArm.Low);
                         var liveSlot = liveArm.SingleVal;
-                        if (liveSlot.IsAddress)
-                            throw new NotSupportedException("Conditionally selecting a managed address is not supported.");
                         var liveExpr = liveArm.HasStmts ? exp.Block(new[] { liveArm.Stmts, liveSlot.Value }) : liveSlot.Value;
                         var termExpr = termArm.HasStmts ? termArm.Stmts : exp.Block(Array.Empty<T>());
                         var result = thenTerm ? exp.If(cond, termExpr, liveExpr) : exp.If(cond, liveExpr, termExpr);
-                        Push(ref f, new Slot { Value = result, Type = liveSlot.Type });
+                        Push(ref f, new Slot { Value = result, Type = liveSlot.Type, Flags = liveSlot.Flags & SlotFlags.Address });
                         return next;
                     }
                     else
@@ -2162,14 +2157,15 @@ namespace CIL
                     {
                         var s1 = GetArmSlot(ref thenArm, ref f, low);
                         var s2 = GetArmSlot(ref elseArm, ref f, low);
-                        if (s1.IsAddress || s2.IsAddress)
-                            throw new NotSupportedException("Conditionally selecting a managed address is not supported.");
+                        bool bothAddr = s1.IsAddress && s2.IsAddress;
+                        if (s1.IsAddress != s2.IsAddress)
+                            throw new InvalidProgramException("Cannot merge a managed address with a non-address value.");
                         Truncate(ref f, low);
                         var type = UnifyTypes(s1, s2);
-                        var v1 = Coerce(s1, type);
-                        var v2 = Coerce(s2, type);
+                        var v1 = bothAddr ? s1 : Coerce(s1, type);
+                        var v2 = bothAddr ? s2 : Coerce(s2, type);
                         // Fold pure boolean ternary into AndAlso / OrElse / cond / Not(cond)
-                        if (type == typeof(bool) && !thenArm.HasStmts && !elseArm.HasStmts)
+                        if (!bothAddr && type == typeof(bool) && !thenArm.HasStmts && !elseArm.HasStmts)
                         {
                             if (IsConstBool(s2, false))
                             {
@@ -2191,7 +2187,7 @@ namespace CIL
                         }
                         var e1 = thenArm.HasStmts ? exp.Block(new[] { thenArm.Stmts, v1.Value }) : v1.Value;
                         var e2 = elseArm.HasStmts ? exp.Block(new[] { elseArm.Stmts, v2.Value }) : v2.Value;
-                        Push(ref f, new Slot { Value = exp.If(cond, e1, e2), Type = type });
+                        Push(ref f, new Slot { Value = exp.If(cond, e1, e2), Type = type, Flags = bothAddr ? SlotFlags.Address : SlotFlags.None });
                         return merge;
                     }
                     else
@@ -2205,13 +2201,14 @@ namespace CIL
                         {
                             var s1 = GetArmSlot(ref thenArm, ref f, low + j);
                             var s2 = GetArmSlot(ref elseArm, ref f, low + j);
-                            if (s1.IsAddress || s2.IsAddress)
-                                throw new NotSupportedException("Conditionally selecting a managed address is not supported.");
+                            bool bothAddr = s1.IsAddress && s2.IsAddress;
+                            if (s1.IsAddress != s2.IsAddress)
+                                throw new InvalidProgramException("Cannot merge a managed address with a non-address value.");
                             var type = UnifyTypes(s1, s2);
-                            var tv = Temp(type);
-                            temps[j] = new Slot { Value = tv, Type = type, Flags = SlotFlags.Stable };
-                            tStmts.Add(exp.Assign(tv, Coerce(s1, type).Value));
-                            eStmts.Add(exp.Assign(tv, Coerce(s2, type).Value));
+                            var tv = Temp(bothAddr ? type.MakeByRefType() : type);
+                            temps[j] = new Slot { Value = tv, Type = type, Flags = SlotFlags.Stable | (bothAddr ? SlotFlags.Address : SlotFlags.None) };
+                            tStmts.Add(exp.Assign(tv, bothAddr ? s1.Value : Coerce(s1, type).Value));
+                            eStmts.Add(exp.Assign(tv, bothAddr ? s2.Value : Coerce(s2, type).Value));
                         }
                         Truncate(ref f, low);
                         Emit(ref f, exp.If(cond, exp.Block(tStmts), exp.Block(eStmts)));
@@ -2345,14 +2342,17 @@ namespace CIL
                     else if (produced == 1)
                     {
                         Type type = null;
+                        bool anyAddr = false, allAddr = true;
                         for (int k = 0; k < arms.Length; ++k)
                         {
                             if (arms[k].ReachedBlock < 0) continue;
                             var s = GetArmSlot(ref arms[k], ref f, low);
-                            if (s.IsAddress)
-                                throw new NotSupportedException("Conditionally selecting a managed address is not supported.");
+                            anyAddr |= s.IsAddress;
+                            allAddr &= s.IsAddress;
                             type = type == null ? s.Type : UnifyTypes(type, s);
                         }
+                        if (anyAddr && !allAddr)
+                            throw new InvalidProgramException("Cannot merge a managed address with a non-address value.");
                         for (int k = 0; k < arms.Length; ++k)
                         {
                             if (arms[k].ReachedBlock < 0)
@@ -2361,12 +2361,13 @@ namespace CIL
                             }
                             else
                             {
-                                var v = Coerce(GetArmSlot(ref arms[k], ref f, low), type).Value;
+                                var s = GetArmSlot(ref arms[k], ref f, low);
+                                var v = allAddr ? s.Value : Coerce(s, type).Value;
                                 bodies[k] = arms[k].HasStmts ? exp.Block(new[] { arms[k].Stmts, v }) : v;
                             }
                         }
                         Truncate(ref f, low);
-                        EmitSwitchExpr(val, rawCases, uniqueStarts, bodies, bodies[defaultIdx], ref f, pushResult: true, resultType: type);
+                        EmitSwitchExpr(val, rawCases, uniqueStarts, bodies, bodies[defaultIdx], ref f, pushResult: true, resultType: type, resultIsAddress: allAddr);
                     }
                     else
                     {
@@ -2374,15 +2375,23 @@ namespace CIL
                         for (int j = 0; j < produced; ++j)
                         {
                             Type type = null;
+                            bool anyAddr = false, allAddr = true;
                             for (int k = 0; k < arms.Length; ++k)
                             {
                                 if (arms[k].ReachedBlock < 0) continue;
                                 var s = GetArmSlot(ref arms[k], ref f, low + j);
-                                if (s.IsAddress)
-                                    throw new NotSupportedException("Conditionally selecting a managed address is not supported.");
+                                anyAddr |= s.IsAddress;
+                                allAddr &= s.IsAddress;
                                 type = type == null ? s.Type : UnifyTypes(type, s);
                             }
-                            temps[j] = new Slot { Value = Temp(type), Type = type, Flags = SlotFlags.Stable };
+                            if (anyAddr && !allAddr)
+                                throw new InvalidProgramException("Cannot merge a managed address with a non-address value.");
+                            temps[j] = new Slot
+                            {
+                                Value = Temp(allAddr ? type.MakeByRefType() : type),
+                                Type = type,
+                                Flags = SlotFlags.Stable | (allAddr ? SlotFlags.Address : SlotFlags.None),
+                            };
                         }
                         for (int k = 0; k < arms.Length; ++k)
                         {
@@ -2395,7 +2404,10 @@ namespace CIL
                                 var stmts = new List<T>(produced + 1);
                                 if (arms[k].HasStmts) stmts.Add(arms[k].Stmts);
                                 for (int j = 0; j < produced; ++j)
-                                    stmts.Add(exp.Assign(temps[j].Value, Coerce(GetArmSlot(ref arms[k], ref f, low + j), temps[j].Type).Value));
+                                {
+                                    var s = GetArmSlot(ref arms[k], ref f, low + j);
+                                    stmts.Add(exp.Assign(temps[j].Value, temps[j].IsAddress ? s.Value : Coerce(s, temps[j].Type).Value));
+                                }
                                 bodies[k] = exp.Block(stmts);
                             }
                         }
@@ -2439,14 +2451,14 @@ namespace CIL
                 return chosen;
             }
 
-            void EmitSwitchExpr(T val, List<KeyValuePair<int, int>> rawCases, List<int> uniqueStarts, T[] bodies, T defaultBody, ref Frame f, bool pushResult, Type resultType)
+            void EmitSwitchExpr(T val, List<KeyValuePair<int, int>> rawCases, List<int> uniqueStarts, T[] bodies, T defaultBody, ref Frame f, bool pushResult, Type resultType, bool resultIsAddress = false)
             {
                 var pairs = new KeyValuePair<int, T>[rawCases.Count];
                 for (int k = 0; k < rawCases.Count; ++k)
                     pairs[k] = new KeyValuePair<int, T>(rawCases[k].Key, bodies[uniqueStarts.IndexOf(rawCases[k].Value)]);
                 var sw = exp.Switch(val, pairs, defaultBody);
                 if (pushResult)
-                    Push(ref f, new Slot { Value = sw, Type = resultType });
+                    Push(ref f, new Slot { Value = sw, Type = resultType, Flags = resultIsAddress ? SlotFlags.Address : SlotFlags.None });
                 else
                     Emit(ref f, sw);
             }
@@ -2715,24 +2727,24 @@ namespace CIL
                     //--------------- comparisons --------------
                     case OpType.Ceq:
                     {
-                        var r = Pop(ref f);
-                        var l = Pop(ref f);
+                        var r = PopAny(ref f);
+                        var l = PopAny(ref f);
                         Push(ref f, Compare(Cmp.Eq, l, r, false));
                         break;
                     }
                     case OpType.Cgt:
                     case OpType.Cgt_un:
                     {
-                        var r = Pop(ref f);
-                        var l = Pop(ref f);
+                        var r = PopAny(ref f);
+                        var l = PopAny(ref f);
                         Push(ref f, Compare(Cmp.Gt, l, r, op == OpType.Cgt_un));
                         break;
                     }
                     case OpType.Clt:
                     case OpType.Clt_un:
                     {
-                        var r = Pop(ref f);
-                        var l = Pop(ref f);
+                        var r = PopAny(ref f);
+                        var l = PopAny(ref f);
                         Push(ref f, Compare(Cmp.Lt, l, r, op == OpType.Clt_un));
                         break;
                     }
@@ -2807,16 +2819,51 @@ namespace CIL
                         return true;
 
                     //--------------- method calls --------------
-#if DEBUG
                     case OpType.Ldftn:
                         Push(ref f, new Slot { Value = exp.GetPointer(x.ResolveMethod(), default(T)), Type = nativeInt });
                         break;
                     case OpType.Ldvirtftn:
-                        Push(ref f, new Slot { Value = exp.GetPointer(x.ResolveMethod(), Pop(ref f).Value), Type = nativeInt });
+                        Push(ref f, new Slot { Value = exp.GetPointer(x.ResolveMethod(), PopAny(ref f).Value), Type = nativeInt });
                         break;
-#endif
                     case OpType.Calli:
-                        throw new NotSupportedException("Indirect calls are not supported.");
+                    {
+                        var sigBytes = x.ResolveSignature();
+                        var sig = x.ResolveCallSignature();
+                        var entry = PopAny(ref f);
+                        var paramTypes = sig.ParameterTypes;
+                        var margs = paramTypes.Length == 0 ? Array.Empty<T>() : new T[paramTypes.Length];
+                        for (int k = paramTypes.Length - 1; k >= 0; --k)
+                        {
+                            var pt = paramTypes[k];
+                            margs[k] = pt.IsByRef ? PopAddress(ref f).Value : Coerce(Pop(ref f), pt).Value;
+                        }
+                        if (sig.HasThis && !sig.ExplicitThis)
+                        {
+                            var inst = PopAny(ref f);
+                            var all = new T[margs.Length + 1];
+                            all[0] = inst.Value;
+                            Array.Copy(margs, 0, all, 1, margs.Length);
+                            margs = all;
+                        }
+                        var tail = i > 0 && code[i - 1].OpCode.Type() == OpType.Tail_;
+                        var call = exp.CallIndirect(sigBytes, entry.Value, tail, margs);
+                        if (sig.ReturnType == typeof(void))
+                        {
+                            Emit(ref f, call);
+                        }
+                        else
+                        {
+                            var ret = sig.ReturnType;
+                            var isByRef = ret.IsByRef;
+                            Push(ref f, new Slot
+                            {
+                                Value = call,
+                                Type = isByRef ? ret.GetElementType() : ret,
+                                Flags = isByRef ? SlotFlags.Address : SlotFlags.None,
+                            });
+                        }
+                        break;
+                    }
                     case OpType.Call:
                     case OpType.Callvirt:
                         DoCall(i, x, ref f);
@@ -2894,8 +2941,9 @@ namespace CIL
                     {
                         int k = ArgIndex(x);
                         if (argIsAddress[k])
-                            throw new NotSupportedException("Rebinding a ref parameter is not supported.");
-                        Emit(ref f, exp.Assign(args[k], Coerce(Pop(ref f), argTypes[k]).Value));
+                            Emit(ref f, exp.Assign(args[k], PopAddress(ref f).Value));
+                        else
+                            Emit(ref f, exp.Assign(args[k], Coerce(Pop(ref f), argTypes[k]).Value));
                         break;
                     }
                     case OpType.Ldloc:
@@ -2932,8 +2980,9 @@ namespace CIL
                     {
                         int k = LocalIndex(x);
                         if (localIsAddress[k])
-                            throw new NotSupportedException("Ref locals are not supported.");
-                        Emit(ref f, exp.Assign(locals[k], Coerce(Pop(ref f), localTypes[k]).Value));
+                            Emit(ref f, exp.Assign(locals[k], PopAddress(ref f).Value));
+                        else
+                            Emit(ref f, exp.Assign(locals[k], Coerce(Pop(ref f), localTypes[k]).Value));
                         break;
                     }
                     case OpType.Ldfld:
@@ -3080,7 +3129,11 @@ namespace CIL
                     case OpType.Ldind_u4:
                     {
                         var addr = PopAddress(ref f);
-                        var valType = op == OpType.Ldobj ? x.ResolveType() : (addr.Type ?? IndTypeFor(op));
+                        var valType = op == OpType.Ldobj
+                            ? x.ResolveType()
+                            : addr.Type.IsPointer
+                                ? (addr.Type.GetElementType() == typeof(void) ? IndTypeFor(op) : addr.Type.GetElementType())
+                                : (addr.IsAddress && addr.Type != null ? addr.Type : IndTypeFor(op));
                         Push(ref f, new Slot { Value = exp.AddressGet(addr.Value), Type = valType });
                         break;
                     }
@@ -3103,10 +3156,27 @@ namespace CIL
                     {
                         var v = Pop(ref f);
                         var addr = PopAddress(ref f);
-                        var dstType = addr.Type != null && !addr.Type.IsPointer ? addr.Type : null;
+                        var dstType = addr.Type.IsPointer
+                            ? (addr.Type.GetElementType() == typeof(void) ? null : addr.Type.GetElementType())
+                            : (addr.IsAddress ? addr.Type : null);
                         Emit(ref f, exp.AddressSet(addr.Value, dstType == null ? v.Value : Coerce(v, dstType).Value));
                         break;
                     }
+                    case OpType.Mkrefany:
+                    {
+                        var t = x.ResolveType();
+                        Push(ref f, new Slot { Value = exp.MakeRefAny(PopAddress(ref f).Value, t), Type = typeof(TypedReference) });
+                        break;
+                    }
+                    case OpType.Refanyval:
+                    {
+                        var t = x.ResolveType();
+                        Push(ref f, new Slot { Value = exp.RefAnyValue(Pop(ref f).Value, t), Type = t, Flags = SlotFlags.Address });
+                        break;
+                    }
+                    case OpType.Refanytype:
+                        Push(ref f, new Slot { Value = exp.RefAnyType(Pop(ref f).Value), Type = typeof(RuntimeTypeHandle) });
+                        break;
                     case OpType.Arglist:
                         Push(ref f, new Slot { Value = exp.ArgumentList(), Type = typeof(RuntimeArgumentHandle) });
                         break;
@@ -3241,12 +3311,12 @@ namespace CIL
                     case OpType.Conv_i2: Push(ref f, Conv(Pop(ref f), typeof(short), false, false)); break;
                     case OpType.Conv_i4: Push(ref f, Conv(Pop(ref f), typeof(int), false, false)); break;
                     case OpType.Conv_i8: Push(ref f, Conv(Pop(ref f), typeof(long), false, false)); break;
-                    case OpType.Conv_i: Push(ref f, Conv(Pop(ref f), nativeInt, false, false)); break;
+                    case OpType.Conv_i: Push(ref f, Conv(PopAny(ref f), nativeInt, false, false)); break;
                     case OpType.Conv_u1: Push(ref f, Conv(Pop(ref f), typeof(byte), false, true)); break;
                     case OpType.Conv_u2: Push(ref f, Conv(Pop(ref f), typeof(ushort), false, true)); break;
                     case OpType.Conv_u4: Push(ref f, Conv(Pop(ref f), typeof(uint), false, true)); break;
                     case OpType.Conv_u8: Push(ref f, Conv(Pop(ref f), typeof(ulong), false, true)); break;
-                    case OpType.Conv_u: Push(ref f, Conv(Pop(ref f), nativeUInt, false, true)); break;
+                    case OpType.Conv_u: Push(ref f, Conv(PopAny(ref f), nativeUInt, false, true)); break;
                     case OpType.Conv_r4: Push(ref f, Conv(Pop(ref f), typeof(float), false, false)); break;
                     case OpType.Conv_r8: Push(ref f, Conv(Pop(ref f), typeof(double), false, false)); break;
                     case OpType.Conv_r_un: Push(ref f, Conv(Pop(ref f), typeof(double), false, true)); break;
@@ -3325,9 +3395,10 @@ namespace CIL
                 var margs = PopArgs(ref f, ps);
                 if (m is ConstructorInfo ctor)
                 {
-                    if (!ctor.DeclaringType.IsValueType)
-                        throw new NotSupportedException("Constructor chaining is not supported.");
-                    Emit(ref f, exp.Assign(PopAddress(ref f).Value, exp.New(ctor, margs)));
+                    if (ctor.DeclaringType.IsValueType)
+                        Emit(ref f, exp.Assign(PopAddress(ref f).Value, exp.New(ctor, margs)));
+                    else
+                        Emit(ref f, exp.Call(ctor, false, PopAny(ref f).Value, margs));
                     return;
                 }
 
@@ -3434,16 +3505,16 @@ namespace CIL
                     case OpType.Brtrue:
                     case OpType.Brtrue_s:
                         takenWhenTrue = true;
-                        return ToBool(Pop(ref f)).Value;
+                        return ToBool(PopAny(ref f)).Value;
                     case OpType.Brfalse:
                     case OpType.Brfalse_s:
                         takenWhenTrue = false;
-                        return ToBool(Pop(ref f)).Value;
+                        return ToBool(PopAny(ref f)).Value;
                     default:
                     {
                         takenWhenTrue = true;
-                        var r = Pop(ref f);
-                        var l = Pop(ref f);
+                        var r = PopAny(ref f);
+                        var l = PopAny(ref f);
                         return BranchCompare(x.OpCode.Type(), l, r).Value;
                     }
                 }
@@ -3542,8 +3613,8 @@ namespace CIL
             Slot PopAddress(ref Frame f)
             {
                 var s = PopAny(ref f);
-                if (!s.IsAddress)
-                    throw new NotSupportedException("Indirect access through a computed pointer is not supported.");
+                if (!s.IsAddress && !s.Type.IsPointer && s.Type != typeof(IntPtr) && s.Type != typeof(UIntPtr) && s.Type != nativeInt && s.Type != nativeUInt)
+                    throw new NotSupportedException("Indirect access through a non-pointer value is not supported.");
                 return s;
             }
 
@@ -3598,7 +3669,9 @@ namespace CIL
                     var obj = s.AddrBaseStable ? s.AddrBase : SpillValue(ref f, s.AddrBase, s.AddrBaseType);
                     return new Slot { Value = exp.AddressOf(exp.Field(s.AddrField, obj)), Type = s.Type, Flags = SlotFlags.Stable | SlotFlags.Address };
                 }
-                throw new NotSupportedException("A computed address cannot be preserved across a statement.");
+                var rt = Temp(s.Type.MakeByRefType());
+                EmitRaw(ref f, exp.Assign(rt, s.Value));
+                return new Slot { Value = rt, Type = s.Type, Flags = SlotFlags.Stable | SlotFlags.Address };
             }
 
             T SpillValue(ref Frame f, T value, Type type)
@@ -3685,7 +3758,7 @@ namespace CIL
                 var t = s.Type;
                 if (t == typeof(IntPtr))
                     return Reinterpret(s, nativeInt);
-                if (t == typeof(UIntPtr))
+                if (t == typeof(UIntPtr) || t.IsPointer)
                     return Reinterpret(s, nativeUInt);
                 if (t.IsEnum)
                 {
@@ -3858,6 +3931,29 @@ namespace CIL
 
             Slot Compare(Cmp kind, Slot l, Slot r, bool un)
             {
+                if (l.Type.IsPointer || r.Type.IsPointer || l.IsAddress || r.IsAddress)
+                {
+                    if (kind == Cmp.Eq || kind == Cmp.Ne)
+                    {
+                        if (l.IsNull && !r.IsNull)
+                            l = new Slot { Value = exp.Constant(null, r.Type), Type = r.Type, Const = ConstKind.Null, Flags = SlotFlags.Stable };
+                        else if (r.IsNull && !l.IsNull)
+                            r = new Slot { Value = exp.Constant(null, l.Type), Type = l.Type, Const = ConstKind.Null, Flags = SlotFlags.Stable };
+                        return new Slot { Value = kind == Cmp.Eq ? exp.Equal(l.Value, r.Value) : exp.NotEqual(l.Value, r.Value), Type = typeof(bool), Flags = SlotFlags.FromCmp };
+                    }
+                    // Ordered pointer comparison (unsigned native int)
+                    l = Reinterpret(l, nativeUInt);
+                    r = Reinterpret(r, nativeUInt);
+                    T pe;
+                    switch (kind)
+                    {
+                        case Cmp.Lt: pe = exp.LessThan(l.Value, r.Value); break;
+                        case Cmp.Le: pe = exp.LessThanOrEqual(l.Value, r.Value); break;
+                        case Cmp.Gt: pe = exp.GreaterThan(l.Value, r.Value); break;
+                        default:     pe = exp.GreaterThanOrEqual(l.Value, r.Value); break;
+                    }
+                    return new Slot { Value = pe, Type = typeof(bool), Flags = SlotFlags.FromCmp };
+                }
                 if (IsReference(l.Type) || IsReference(r.Type))
                 {
                     if (!IsReference(l.Type)) l = new Slot { Value = exp.Cast(l.Value, typeof(object)), Type = typeof(object) };
@@ -3987,7 +4083,7 @@ namespace CIL
                 || (IsIntegral(target) && (c.Const == ConstKind.Int32 || c.Const == ConstKind.Int64))
                 || (target.IsEnum && (c.Const == ConstKind.Int32 || c.Const == ConstKind.Int64));
 
-            static bool IsReference(Type t) => !t.IsValueType || Nullable.GetUnderlyingType(t) != null;
+            static bool IsReference(Type t) => !t.IsValueType || t.IsPointer || Nullable.GetUnderlyingType(t) != null;
 
             static bool IsSmall(Type t) =>
                 t == typeof(bool) || t == typeof(char) || t.IsEnum || t == typeof(sbyte) || t == typeof(byte) || t == typeof(short) || t == typeof(ushort);

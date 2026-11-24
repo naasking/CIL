@@ -12,7 +12,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Remove="CallSignature.cs" />
     <Compile Remove="CFA.cs" />
     <Compile Remove="CFG - Copy %282%29.cs" />
     <Compile Remove="CFG - Copy.cs" />

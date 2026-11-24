@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Reflection;
 using System.Collections.Generic;
 
@@ -78,6 +78,9 @@ namespace CIL
         public virtual T BlockCopy(T dst, T src, T byteCount) { throw new NotSupportedException(); }
         public virtual T Block(IEnumerable<T> exp) { throw new NotSupportedException(); }
         public virtual T StructCopy(T dst, T src, Type structType) { throw new NotSupportedException(); }
+        public virtual T MakeRefAny(T address, Type type) { throw new NotSupportedException(); }
+        public virtual T RefAnyValue(T typedRef, Type type) { throw new NotSupportedException(); }
+        public virtual T RefAnyType(T typedRef) { throw new NotSupportedException(); }
         public virtual T EndFilter(T value) { throw new NotSupportedException(); }
         public virtual T SizeOf(Type valueType) { throw new NotSupportedException(); }
         public virtual T TryCatchFinally(T _try, IEnumerable<CatchHandler<T>> handlers, T _finally) { throw new NotSupportedException(); }

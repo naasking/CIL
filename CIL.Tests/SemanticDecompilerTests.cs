@@ -419,5 +419,209 @@ namespace CIL.Tests
         }
 
         #endregion
+
+        #region Completeness — CallSignature, ldftn, ref locals/ternaries, ctor chaining, TypedReference, metadata
+
+        /// <summary>
+        /// Minimal non-LINQ tagless-final visitor (T = string, no TypeOf/IsConstant/Value)
+        /// verifying decoder support for CIL features beyond LINQ Expressions.
+        /// </summary>
+        sealed class StringVisitor : ExpressionError<string>
+        {
+            public override string Param(System.Reflection.ParameterInfo x) => x.Name;
+            public override string Param(string name, Type type) => name;
+            public override string Local(System.Reflection.LocalVariableInfo x) => $"loc{x.LocalIndex}";
+            public override string Constant<TValue>(TValue value) => value?.ToString() ?? "null";
+            public override string Constant(object value, Type type) => value?.ToString() ?? "null";
+            public override string Add(string l, string r) => $"({l} + {r})";
+            public override string Subtract(string l, string r) => $"({l} - {r})";
+            public override string Multiply(string l, string r) => $"({l} * {r})";
+            public override string LessThan(string l, string r) => $"({l} < {r})";
+            public override string GreaterThan(string l, string r) => $"({l} > {r})";
+            public override string Equal(string l, string r) => $"({l} == {r})";
+            public override string NotEqual(string l, string r) => $"({l} != {r})";
+            public override string Not(string e) => $"(!{e})";
+            public override string Cast(string e, Type castTo) => $"(({castTo.Name}){e})";
+            public override string Assign(string v, string val) => $"{v} = {val}";
+            public override string Duplicate(string e) => e;
+            public override string AddressOf(string b) => $"&{b}";
+            public override string AddressGet(string a) => $"*{a}";
+            public override string AddressSet(string a, string v) => $"*{a} = {v}";
+            public override string ArrayGet(string a, string i) => $"{a}[{i}]";
+            public override string Field(System.Reflection.FieldInfo f, string o) => o == null ? f.Name : $"{o}.{f.Name}";
+            public override string If(string c, string t, string e) => $"({c} ? {t} : {e})";
+            public override string If(string c, string t) => $"if ({c}) {{ {t} }}";
+            public override string Block(IEnumerable<string> e) => string.Join("; ", e);
+            public override string Return() => "return";
+            public override string Return(string e) => $"return {e}";
+            public override string Label(string name) => name;
+            public override string MarkLabel(string lbl) => $"{lbl}:";
+            public override string Goto(string lbl) => $"goto {lbl}";
+            public override string Break(string lbl) => $"break {lbl}";
+            public override string Continue(string lbl) => $"continue {lbl}";
+            public override string Loop(string body, string brk, string cont) => $"loop {{ {body} }}";
+            public override string Call(System.Reflection.MethodBase m, bool tail, string o, IEnumerable<string> args) =>
+                $"{(o == null ? "" : o + ".")}{m.Name}({string.Join(", ", args)})";
+            public override string New(System.Reflection.ConstructorInfo c, IEnumerable<string> args) =>
+                $"new {c.DeclaringType.Name}({string.Join(", ", args)})";
+            public override string GetPointer(System.Reflection.MethodBase m, string o) =>
+                o == null ? $"&{m.Name}" : $"&{o}.{m.Name}";
+            public override string CallIndirect(byte[] sig, string ftn, bool tail, IEnumerable<string> args) =>
+                $"calli({ftn})({string.Join(", ", args)})";
+            public override string MakeRefAny(string addr, Type type) => $"mkrefany<{type.Name}>({addr})";
+            public override string RefAnyValue(string tr, Type type) => $"refanyval<{type.Name}>({tr})";
+            public override string RefAnyType(string tr) => $"refanytype({tr})";
+        }
+
+        static int RefLocalAndTernary(int[] arr, int a, int b)
+        {
+            ref int r = ref (a > b ? ref arr[0] : ref arr[1]);
+            r = r + 10;
+            return r;
+        }
+
+        static int RebindRefParam(ref int x, ref int y, bool pickY)
+        {
+            if (pickY)
+                x = ref y;
+            x = 99;
+            return x;
+        }
+
+        static int UseTypedRef(int x)
+        {
+            TypedReference tr = __makeref(x);
+            Type t = __reftype(tr);
+            __refvalue(tr, int) = 42;
+            return t == typeof(int) ? x : -1;
+        }
+
+        class CtorBase { public int V; public CtorBase(int v) { V = v; } }
+        class CtorDerived : CtorBase { public CtorDerived(int x) : base(x + 1) { V += 2; } }
+
+        [Fact]
+        public void RefLocalAndConditionalRef_DecodesWithCustomVisitor()
+        {
+            var m = typeof(SemanticDecompilerTests).GetMethod(nameof(RefLocalAndTernary), System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic);
+            var text = m.Decompile(new StringVisitor(), out _);
+            Assert.Contains("&arr[0]", text);
+            Assert.Contains("&arr[1]", text);
+            Assert.Contains("+", text);
+            Assert.Throws<NotSupportedException>(() => LinqDecompiler.Decompile(new Func<int[], int, int, int>(RefLocalAndTernary)));
+        }
+
+        [Fact]
+        public void RefParamRebind_DecodesWithCustomVisitor()
+        {
+            var m = typeof(SemanticDecompilerTests).GetMethod(nameof(RebindRefParam), System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic);
+            var text = m.Decompile(new StringVisitor(), out _);
+            Assert.Contains("x = y", text);
+            Assert.Contains("*x = 99", text);
+        }
+
+        [Fact]
+        public void TypedReference_MkRefAny_RefAnyVal_RefAnyType_Decodes()
+        {
+            var m = typeof(SemanticDecompilerTests).GetMethod(nameof(UseTypedRef), System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic);
+            var text = m.Decompile(new StringVisitor(), out _);
+            Assert.Contains("mkrefany<Int32>", text);
+            Assert.Contains("refanyval<Int32>", text);
+            Assert.Contains("refanytype", text);
+        }
+
+        [Fact]
+        public void Ldftn_DecodesInBothDebugAndRelease()
+        {
+            var m = new Func<Func<int>>(MakeDelegate).Method;
+            var text = m.Decompile(new StringVisitor(), out _);
+            Assert.Contains("&", text);
+        }
+
+        [Fact]
+        public void ConstructorChaining_DecodesWithCustomVisitor()
+        {
+            var ctor = typeof(CtorDerived).GetConstructor(new[] { typeof(int) });
+            var text = ctor.Decompile(new StringVisitor(), out _);
+            Assert.Contains("this..ctor((x + 1))", text);
+            Assert.Throws<NotSupportedException>(() => ctor.Decompile(new LinqDecompiler(), out _));
+        }
+
+        [Fact]
+        public void CallSignature_DecodesStaticInstanceByRefPointerArrayAndVarArg()
+        {
+            // Static default: int (string, ref long, int*, byte[])
+            var blob1 = new byte[] { 0x00, 0x04, 0x08, 0x0E, 0x10, 0x0A, 0x0F, 0x08, 0x1D, 0x05 };
+            var sig1 = new CallSignature(blob1);
+            Assert.False(sig1.HasThis);
+            Assert.Equal(typeof(int), sig1.ReturnType);
+            Assert.Equal(4, sig1.ParameterTypes.Length);
+            Assert.Equal(typeof(string), sig1.ParameterTypes[0]);
+            Assert.Equal(typeof(long).MakeByRefType(), sig1.ParameterTypes[1]);
+            Assert.Equal(typeof(int).MakePointerType(), sig1.ParameterTypes[2]);
+            Assert.Equal(typeof(byte[]), sig1.ParameterTypes[3]);
+            Assert.Equal(-1, sig1.VarArgSentinel);
+
+            // Instance varargs: void (bool, ..., double)
+            var blob2 = new byte[] { 0x25, 0x02, 0x01, 0x02, 0x41, 0x0D };
+            var sig2 = new CallSignature(blob2);
+            Assert.True(sig2.HasThis);
+            Assert.True((sig2.CallingConvention & System.Reflection.CallingConventions.VarArgs) != 0);
+            Assert.Equal(typeof(void), sig2.ReturnType);
+            Assert.Equal(2, sig2.ParameterTypes.Length);
+            Assert.Equal(typeof(bool), sig2.ParameterTypes[0]);
+            Assert.Equal(typeof(double), sig2.ParameterTypes[1]);
+            Assert.Equal(1, sig2.VarArgSentinel);
+        }
+
+        [Fact]
+        public void ILReader_ExposesMaxStackSizeAndInitLocals_AndLabelSupportsLargeOffsets()
+        {
+            var m = new Func<int, int>(ForSum).Method;
+            var reader = m.GetILReader();
+            Assert.True(reader.MaxStackSize > 0);
+            Assert.True(reader.InitLocals);
+            var lbl = new IL.Label { Offset = 100_000 };
+            Assert.Equal(100_000, lbl.Offset);
+        }
+
+        static int AddTarget(int a, int b) => a + b;
+
+        static unsafe int InvokeViaCalli(int a, int b)
+        {
+            delegate*<int, int, int> fn = &AddTarget;
+            return fn(a, b);
+        }
+
+        static unsafe int PointerLoopSum(int* ptr, int count)
+        {
+            int sum = 0;
+            int* end = ptr + count;
+            for (int* p = ptr; p < end; p++)
+                sum += *p;
+            return sum;
+        }
+
+        [Fact]
+        public void Calli_FunctionPointer_DecodesWithCustomVisitor()
+        {
+            var m = typeof(SemanticDecompilerTests).GetMethod(nameof(InvokeViaCalli), System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic);
+            var text = m.Decompile(new StringVisitor(), out _);
+            Assert.Contains("&AddTarget", text);
+            Assert.Contains("calli(", text);
+            Assert.Contains("a, b", text);
+            Assert.Throws<NotSupportedException>(() => m.Decompile(new LinqDecompiler(), out _));
+        }
+
+        [Fact]
+        public void UnmanagedPointers_ArithmeticAndComparison_DecodesWithCustomVisitor()
+        {
+            var m = typeof(SemanticDecompilerTests).GetMethod(nameof(PointerLoopSum), System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic);
+            var text = m.Decompile(new StringVisitor(), out _);
+            Assert.Contains("+", text);
+            Assert.Contains("*", text);
+            Assert.Throws<NotSupportedException>(() => m.Decompile(new LinqDecompiler(), out _));
+        }
+
+        #endregion
     }
 }

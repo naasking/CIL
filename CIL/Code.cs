@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Linq;
 using System.Collections;
 using System.Collections.Generic;
@@ -15,15 +15,15 @@ namespace CIL
         // is always strictly lower than the length of the bytecode stream. The 
         // labelIndex enables mapping a label to an instruction index in constant time.
         Instruction[] instructions;
-        ushort count;
-        ushort[] labelIndex;
+        int count;
+        int[] labelIndex;
         ExceptionRegion[] handlers;
 
         internal Code(int byteCodeLength)
         {
             count = 0;
             instructions = new Instruction[byteCodeLength];
-            labelIndex = new ushort[byteCodeLength];
+            labelIndex = new int[byteCodeLength];
             handlers = Array.Empty<ExceptionRegion>();
         }
 
@@ -107,7 +107,7 @@ namespace CIL
             instructions[count] = instr;
             var size = instr.Size;
             for (var i = 0; i < size; ++i)
-                labelIndex[offset + i] = (ushort)count;
+                labelIndex[offset + i] = count;
             ++count;
             return size;
         }

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -34,6 +34,8 @@ namespace CIL
             this.Args = method.GetParameters();
             var body = method.GetMethodBody();
             this.Locals = body?.LocalVariables ?? new List<LocalVariableInfo>(0);
+            this.MaxStackSize = body?.MaxStackSize ?? 0;
+            this.InitLocals = body?.InitLocals ?? false;
             this.code = body?.GetILAsByteArray() ?? new byte[0];
             byteCodeLength = this.bound = code.Length;
             var clauses = body?.ExceptionHandlingClauses;
@@ -79,6 +81,16 @@ namespace CIL
         /// The method's exception handling regions (try/catch/finally/fault/filter).
         /// </summary>
         public ExceptionRegion[] ExceptionHandlers { get; private set; }
+
+        /// <summary>
+        /// The maximum number of items on the evaluation stack declared by the method header.
+        /// </summary>
+        public int MaxStackSize { get; private set; }
+
+        /// <summary>
+        /// Whether the method header specifies zero-initialization of local variables (.locals init).
+        /// </summary>
+        public bool InitLocals { get; private set; }
 
         /// <summary>
         /// Generate a label marking a position in the instruction stream.
@@ -209,6 +221,11 @@ namespace CIL
         internal byte[] ResolveSignature(int token)
         {
             return module.ResolveSignature(token);
+        }
+
+        internal CallSignature ResolveCallSignature(int token)
+        {
+            return new CallSignature(module.ResolveSignature(token), module, typeContext, methodContext);
         }
 
         internal IEnumerable<KeyValuePair<int, IL.Label>> ResolveBranches(int pos)
